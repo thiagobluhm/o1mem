@@ -1,0 +1,5 @@
+{
+  "_comment": "Limiar do gatilho automatico de /handover. threshold = crescimento da CONVERSA (total - baseline da sessao) para o 1o aviso; reset_step = quanto crescer a mais para reavisar. n=1: ajuste com base no log ~/.claude/handover-nudge.log apos 10-15 sessoes. Env vars CLAUDE_HANDOVER_NUDGE_THRESHOLD / _STEP tem precedencia; CLAUDE_HANDOVER_NUDGE_DISABLE=1 desliga.",
+  "threshold": 80000,
+  "reset_step": 70000
+}

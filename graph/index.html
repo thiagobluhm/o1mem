@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O(1)mem · Grafo de Navegação</title>
+<style>
+  :root{
+    color-scheme: dark light;
+    --plane:#0f0f14; --surface:#1a1a22; --surface2:#22222c; --border:#2c2c3a;
+    --ink:#e8e8ec; --ink2:#a9a9b8; --muted:#6d6d80;
+    --edge:#33334a; --edge-hi:#8fd14f; --accent:#3f8ccc;
+    /* categóricas — validadas 5/5 em light e dark (validate_palette.js) */
+    --t-project:#3f8ccc; --t-feedback:#3f9e4d; --t-index:#a06cd5; --t-other:#c07f2e;
+    --warn:#e8a33d;
+    --font: system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono: ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root:where(:not([data-theme="dark"])){
+      --plane:#f4f4f2; --surface:#fcfcfb; --surface2:#f0f0ee; --border:#dedcd5;
+      --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+      --edge:#cfcec6; --edge-hi:#2f8a1f; --warn:#c26a00;
+    }
+  }
+  :root[data-theme="light"]{
+    --plane:#f4f4f2; --surface:#fcfcfb; --surface2:#f0f0ee; --border:#dedcd5;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --edge:#cfcec6; --edge-hi:#2f8a1f; --warn:#c26a00;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--plane);color:var(--ink);font-family:var(--font);
+    height:100vh;overflow:hidden;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+
+  /* ---------------- barra superior ---------------- */
+  .topbar{display:flex;align-items:center;gap:12px;padding:9px 14px;flex-wrap:wrap;
+    border-bottom:1px solid var(--border);background:var(--surface)}
+  .brand{display:flex;align-items:baseline;gap:8px}
+  .brand b{font-size:14px}
+  .brand span{font-size:11.5px;color:var(--muted)}
+  .count{font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums;
+    padding-left:12px;border-left:1px solid var(--border)}
+  .count b{color:var(--ink)}
+  .spacer{flex:1}
+  input,select,button{font:inherit;color:var(--ink);background:var(--plane);
+    border:1px solid var(--border);border-radius:8px}
+  input[type=search],input[type=date]{font-size:12.5px;padding:6px 10px}
+  input[type=search]{width:210px}
+  input[type=date]{width:140px;color-scheme:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .btn{font-size:12.5px;padding:6px 11px;cursor:pointer;white-space:nowrap;
+    transition:border-color .15s,color .15s}
+  .btn:hover{border-color:var(--accent)}
+  .btn.on{border-color:var(--accent);color:var(--ink);
+    background:color-mix(in srgb,var(--accent) 16%,transparent)}
+  a.btn{text-decoration:none;color:var(--ink2);display:inline-block}
+  a.btn:hover{color:var(--ink)}
+  .dates{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
+
+  /* ---------------- chips de tipo ---------------- */
+  .chips{display:flex;gap:7px;flex-wrap:wrap;padding:8px 14px;
+    border-bottom:1px solid var(--border);background:var(--surface)}
+  .chip{display:flex;align-items:center;gap:7px;font-size:12px;padding:4px 11px;
+    border-radius:999px;border:1px solid var(--border);background:var(--plane);
+    cursor:pointer;user-select:none;transition:opacity .15s}
+  .chip[aria-pressed="false"]{opacity:.38}
+  .chip .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .chip .n{color:var(--ink2)}
+  .chip[aria-pressed="true"] .n{color:var(--ink)}
+  .chip .c{font-variant-numeric:tabular-nums;color:var(--muted);font-size:11px}
+
+  /* ---------------- corpo ---------------- */
+  .body{flex:1;display:flex;min-height:0;position:relative}
+  #stage{flex:1;position:relative;min-width:0}
+  canvas{display:block;width:100%;height:100%;cursor:grab}
+  canvas.dragging{cursor:grabbing}
+  #hint{position:absolute;bottom:10px;left:14px;font-size:11.5px;color:var(--muted);
+    pointer-events:none;z-index:2}
+  #tip{position:fixed;z-index:9;pointer-events:none;opacity:0;transition:opacity .1s;
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;
+    font-size:12px;max-width:300px;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  #tip b{display:block;margin-bottom:2px;word-break:break-all;font-family:var(--mono);font-size:11.5px}
+  #tip .m{color:var(--muted);font-size:11px}
+
+  /* ---------------- painel Desenho (esquerda, flutuante) ---------------- */
+  #design{position:absolute;top:12px;left:12px;width:246px;z-index:4;
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    box-shadow:0 8px 26px rgba(0,0,0,.34);max-height:calc(100% - 24px);
+    display:flex;flex-direction:column}
+  #design.min{width:auto}
+  #design.min .dbody{display:none}
+  .dhead{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:11px 13px;border-bottom:1px solid var(--border)}
+  #design.min .dhead{border-bottom:none}
+  .dhead b{font-size:12.5px}
+  .dhead button{background:none;border:none;color:var(--muted);cursor:pointer;
+    font-size:15px;line-height:1;padding:0 2px}
+  .dhead button:hover{color:var(--ink)}
+  .dbody{overflow-y:auto;padding:4px 13px 13px}
+  .grp{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;
+    font-weight:600;margin:13px 0 7px}
+  .fld{margin-bottom:11px}
+  .fld .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+    font-size:11.5px;color:var(--ink2);margin-bottom:4px}
+  .fld .top .v{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;font-size:11.5px}
+  input[type=range]{width:100%;accent-color:var(--edge-hi);background:none;border:none;padding:0;
+    height:16px;cursor:pointer}
+  .chk{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);
+    cursor:pointer;margin-bottom:10px}
+  .chk input{accent-color:var(--edge-hi);width:14px;height:14px;cursor:pointer}
+  #reset{width:100%;padding:8px;font-size:12px;cursor:pointer;margin-top:6px}
+  #reset:hover{border-color:var(--accent)}
+
+  /* ---------------- sidebar direita ---------------- */
+  #sidebar{width:300px;flex:none;background:var(--surface);border-left:1px solid var(--border);
+    display:flex;flex-direction:column;overflow:hidden}
+  .sec{padding:12px 14px;border-bottom:1px solid var(--border)}
+  .sec h3{font-size:10px;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.09em;margin-bottom:8px;font-weight:600;
+    display:flex;justify-content:space-between;align-items:center}
+  #results{max-height:150px;overflow-y:auto;display:none}
+  .hit{padding:5px 7px;cursor:pointer;border-radius:6px;font-size:12px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:3px solid transparent}
+  .hit:hover{background:var(--surface2)}
+  #info{flex:1;overflow-y:auto}
+  #info .type{font-size:10px;text-transform:uppercase;letter-spacing:.09em;font-weight:700}
+  #info .name{font-size:13.5px;font-weight:700;margin:3px 0 8px;word-break:break-all;
+    font-family:var(--mono)}
+  #info .desc{font-size:12.5px;color:var(--ink2);line-height:1.5}
+  .facts{display:flex;gap:18px;margin:11px 0 4px}
+  .facts .f b{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;
+    letter-spacing:-.4px;display:block;line-height:1.2}
+  .facts .f span{font-size:10.5px;color:var(--muted)}
+  #info .empty{color:var(--muted);font-size:12.5px;font-style:italic}
+  .nbh{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;
+    margin:14px 0 5px;font-weight:600}
+  .nbi{display:flex;justify-content:space-between;gap:8px;padding:4px 8px;margin:2px 0;
+    border-radius:5px;cursor:pointer;font-size:12px;border-left:3px solid var(--border);
+    color:var(--ink2)}
+  .nbi:hover{background:var(--surface2);color:var(--ink)}
+  .nbi .id{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nbi .k{font-size:10px;color:var(--muted);flex:none}
+  #center{width:100%;padding:8px;font-size:12px;cursor:pointer;margin-top:13px}
+  #center:hover{border-color:var(--accent)}
+  #foot{padding:9px 14px;font-size:11.5px;color:var(--muted);border-top:1px solid var(--border);
+    font-variant-numeric:tabular-nums}
+  #foot .w{color:var(--warn);margin-top:3px}
+  .noboot{margin:auto;text-align:center;color:var(--muted);font-size:13.5px;padding:40px}
+  code{font-family:var(--mono);font-size:.92em}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><b>🕸️ O(1)mem</b><span>grafo de navegação</span></div>
+  <div class="count" id="hdr">—</div>
+  <input type="search" id="search" placeholder="buscar no mapa…" aria-label="Buscar">
+  <div class="dates">
+    <input type="date" id="d0" aria-label="Modificado a partir de" title="modificado a partir de">
+    <span>–</span>
+    <input type="date" id="d1" aria-label="Modificado até" title="modificado até">
+    <button class="btn" id="dclr" title="limpar filtro de data">✕</button>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" id="fit" title="enquadrar tudo na tela">⤢ Enquadrar</button>
+  <button class="btn" id="re" title="reorganizar o layout">↻ Reorganizar</button>
+  <a class="btn" href="o1mem_dashboard.html">💰 Painel de Economia →</a>
+</div>
+
+<div class="chips" id="chips"></div>
+
+<div class="body">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="design">
+      <div class="dhead"><b>Desenho</b><button id="dtog" title="recolher">✕</button></div>
+      <div class="dbody">
+        <div class="grp">Tela</div>
+        <label class="chk"><input type="checkbox" id="arrows" checked> Setas nas ligações</label>
+        <label class="chk"><input type="checkbox" id="idx"> Mostrar arestas do índice</label>
+        <div class="fld"><div class="top"><span>Tamanho dos nós</span><span class="v" id="v_size">1,00</span></div>
+          <input type="range" id="s_size" min="0.3" max="3" step="0.05" value="1"></div>
+        <div class="fld"><div class="top"><span>Espessura das arestas</span><span class="v" id="v_edge">1,00</span></div>
+          <input type="range" id="s_edge" min="0.2" max="4" step="0.1" value="1"></div>
+        <div class="fld"><div class="top"><span>Limite p/ o rótulo aparecer</span><span class="v" id="v_lbl">0</span></div>
+          <input type="range" id="s_lbl" min="0" max="12" step="1" value="0"></div>
+        <div class="fld"><div class="top"><span>Esconder nós citados menos de</span><span class="v" id="v_min">0</span></div>
+          <input type="range" id="s_min" min="0" max="12" step="1" value="0"></div>
+
+        <div class="grp">Forças</div>
+        <div class="fld"><div class="top"><span>Força de repulsão</span><span class="v" id="v_rep">760</span></div>
+          <input type="range" id="s_rep" min="100" max="2600" step="20" value="760"></div>
+        <div class="fld"><div class="top"><span>Força centrípeta</span><span class="v" id="v_ctr">0,0018</span></div>
+          <input type="range" id="s_ctr" min="0" max="0.012" step="0.0002" value="0.0018"></div>
+        <div class="fld"><div class="top"><span>Força dos links</span><span class="v" id="v_lnk">0,022</span></div>
+          <input type="range" id="s_lnk" min="0.002" max="0.12" step="0.002" value="0.022"></div>
+        <div class="fld"><div class="top"><span>Distância dos links</span><span class="v" id="v_dst">84</span></div>
+          <input type="range" id="s_dst" min="20" max="300" step="4" value="84"></div>
+        <button id="reset">Restaurar padrão</button>
+      </div>
+    </div>
+    <div id="hint">clique num nó para navegar · arraste para mover · roda do mouse para zoom</div>
+  </div>
+
+  <div id="sidebar">
+    <div class="sec" id="rwrap"><div id="results"></div></div>
+    <div class="sec" id="info"><div class="empty">Clique num nó para ver o fio, a descrição e os vizinhos.</div></div>
+    <div id="foot"></div>
+  </div>
+</div>
+
+<div id="tip"></div>
+
+<script>
+const G = window.__O1MEM_GRAPH__ || null;
+const $ = s => document.querySelector(s);
+const TYPES = ['project','feedback','index','other'];
+const cvar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const colorOf = t => cvar('--t-' + (TYPES.includes(t) ? t : 'other'));
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nf = (v,d=2) => v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+/* Defaults do painel Desenho. Um objeto só, porque "Restaurar padrão" precisa de
+   uma fonte única — espalhar os números pelos `value=` do HTML garante que um dia
+   os dois discordem. */
+const DEF = { size:1, edge:1, lbl:0, min:0, rep:760, ctr:0.0018, lnk:0.022, dst:84,
+              arrows:true, idx:false };
+let P = {...DEF};
+
+let nodes=[], links=[], byId={}, sel=null, hover=null;
+let typeOn={}, query='', dFrom=null, dTo=null;
+let view={x:0,y:0,k:1}, drag=null, last=null, anim=null, alpha=0;
+let W=0, H=0, cv, ctx, dpr=1, STATS=null;
+
+/* ====================== boot ====================== */
+function boot(){
+  if(!G || !G.nodes || !G.nodes.length){
+    document.body.innerHTML = '<div class="noboot">Nenhum grafo carregado.<br>' +
+      'Rode <code>python abrir_grafo.py</code> — ele constrói e injeta os dados sozinho.</div>';
+    return;
+  }
+  STATS = stats(G);
+  nodes = G.nodes.map(n => ({...n,
+    x:(Math.random()-.5)*420, y:(Math.random()-.5)*420, vx:0, vy:0,
+    t: Date.parse(n.mtime) || 0 }));
+  byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+  links = G.edges.map(e => ({source:byId[e.source], target:byId[e.target], kind:e.kind}))
+                 .filter(l => l.source && l.target);
+  TYPES.forEach(t => typeOn[t] = true);
+
+  $('#hdr').innerHTML = `<b>${STATS.nodes}</b> nós · <b>${STATS.edges}</b> ligações`;
+  renderChips();
+  renderFoot();
+  wire();
+  resize();
+  reheat();
+}
+
+function stats(g){
+  const byType={};
+  g.nodes.forEach(n => byType[n.type] = (byType[n.type]||0)+1);
+  const cited = new Set(g.edges.map(e => e.target));
+  const adj={}; g.nodes.forEach(n => adj[n.id]=[]);
+  g.edges.forEach(e => { adj[e.source].push(e.target); adj[e.target].push(e.source); });
+  const seen=new Set(); let comps=0;
+  for(const id in adj){
+    if(seen.has(id)) continue;
+    comps++; const q=[id]; seen.add(id);
+    while(q.length) for(const nx of adj[q.pop()]) if(!seen.has(nx)){ seen.add(nx); q.push(nx); }
+  }
+  return { nodes:g.nodes.length, edges:g.edges.length,
+    wiki:g.edges.filter(e=>e.kind==='wiki').length,
+    orphans:g.nodes.filter(n=>n.type!=='index' && !cited.has(n.id)).length,
+    broken:(g.broken||[]).length, comps, byType,
+    project:(g.meta && g.meta.project) || '' };
+}
+
+function renderChips(){
+  $('#chips').innerHTML = TYPES.filter(t => STATS.byType[t]).map(t =>
+    `<div class="chip" data-type="${t}" role="button" aria-pressed="true" tabindex="0">
+       <span class="dot" style="background:${colorOf(t)}"></span>
+       <span class="n">${t}</span><span class="c">${STATS.byType[t]}</span></div>`).join('');
+}
+
+function renderFoot(){
+  const vis = nodes.filter(visible).length, tot = nodes.length;
+  const w = STATS.comps>1 ? `<div class="w">⚠ ${STATS.comps} componentes — há ilhas fora do índice</div>` : '';
+  const b = STATS.broken ? `<div class="w">⚠ ${STATS.broken} link(s) quebrado(s)</div>` : '';
+  $('#foot').innerHTML =
+    `${vis === tot ? `${tot} nós` : `<b style="color:var(--ink)">${vis}</b> de ${tot} nós`} ·
+     ${liveLinks().length} ligações<br>
+     <span style="opacity:.75">${esc(STATS.project)}</span>${w}${b}`;
+}
+
+/* ====================== visibilidade / simulação ====================== */
+function visible(n){
+  if(typeOn[TYPES.includes(n.type)?n.type:'other'] === false) return false;
+  if((n.deg_in||0) < P.min && n.type !== 'index') return false;
+  if(dFrom && n.t && n.t < dFrom) return false;
+  if(dTo && n.t && n.t > dTo) return false;
+  return true;
+}
+const liveLinks = () => links.filter(l =>
+  visible(l.source) && visible(l.target) && (P.idx || l.kind !== 'index'));
+const radius = n => (4 + Math.min(12, Math.sqrt(n.deg_in||0)*2.8)) * P.size;
+
+function reheat(){ alpha = 1; if(!anim) loop(); }
+
+function loop(){
+  anim = requestAnimationFrame(loop);
+  if(alpha > 0.006){ alpha *= 0.986; tick(alpha); }
+  else if(!drag){ cancelAnimationFrame(anim); anim = null; }
+  draw();
+}
+
+function tick(a){
+  const act = nodes.filter(visible);
+  for(let i=0;i<act.length;i++){
+    const n = act[i];
+    n.vx -= n.x*P.ctr*a; n.vy -= n.y*P.ctr*a;
+    for(let j=i+1;j<act.length;j++){
+      const m = act[j];
+      let dx=n.x-m.x, dy=n.y-m.y, d2=dx*dx+dy*dy;
+      if(d2 < 0.01){ dx=Math.random()-.5; dy=Math.random()-.5; d2=0.01; }
+      if(d2 > 250000) continue;
+      const d=Math.sqrt(d2), f=P.rep*a/d2;
+      n.vx+=dx/d*f; n.vy+=dy/d*f; m.vx-=dx/d*f; m.vy-=dy/d*f;
+    }
+  }
+  for(const l of liveLinks()){
+    const dx=l.target.x-l.source.x, dy=l.target.y-l.source.y;
+    const d=Math.hypot(dx,dy)||1, f=(d-P.dst)*P.lnk*a;
+    const ux=dx/d*f, uy=dy/d*f;
+    l.source.vx+=ux; l.source.vy+=uy; l.target.vx-=ux; l.target.vy-=uy;
+  }
+  for(const n of act){
+    if(n===drag){ n.vx=n.vy=0; continue; }
+    n.x += (n.vx *= 0.80); n.y += (n.vy *= 0.80);
+  }
+}
+
+/* ====================== desenho ====================== */
+function resize(){
+  cv = $('#cv'); ctx = cv.getContext('2d');
+  dpr = window.devicePixelRatio || 1;
+  const r = cv.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  draw();
+}
+const toScreen = p => ({ x: p.x*view.k + view.x + W/2, y: p.y*view.k + view.y + H/2 });
+const toWorld = (sx,sy) => ({ x:(sx - W/2 - view.x)/view.k, y:(sy - H/2 - view.y)/view.k });
+
+function matches(n){
+  if(!query) return false;
+  const q = query.toLowerCase();
+  return n.id.toLowerCase().includes(q) || (n.description||'').toLowerCase().includes(q);
+}
+function nbSet(id){
+  const s = new Set();
+  for(const l of liveLinks()){
+    if(l.source.id===id) s.add(l.target.id);
+    if(l.target.id===id) s.add(l.source.id);
+  }
+  return s;
+}
+
+function draw(){
+  if(!ctx) return;
+  ctx.clearRect(0,0,W,H);
+  const focus = sel || hover;
+  const nb = focus ? nbSet(focus) : null;
+  const surf = cvar('--surface');
+  const cEdge = cvar('--edge'), cHi = cvar('--edge-hi');
+
+  for(const l of liveLinks()){
+    const a = toScreen(l.source), b = toScreen(l.target);
+    const hot = focus && (l.source.id===focus || l.target.id===focus);
+    ctx.strokeStyle = hot ? cHi : cEdge;
+    ctx.globalAlpha = hot ? 1 : (focus ? 0.12 : 0.6);
+    ctx.lineWidth = (hot ? 2 : 1) * P.edge;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    // seta: a aresta é DIRIGIDA (quem cita → quem é citado); sem a ponta,
+    // metade da informação do grafo fica invisível.
+    if(P.arrows){
+      const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1;
+      const r = radius(l.target)*Math.min(1.6, Math.max(.7, view.k)) + 2;
+      const tx = b.x - dx/d*r, ty = b.y - dy/d*r;
+      const s = (hot?7:5) * Math.min(1.8, Math.max(.6, P.edge));
+      const ang = Math.atan2(dy,dx);
+      ctx.beginPath();
+      ctx.moveTo(tx,ty);
+      ctx.lineTo(tx - s*Math.cos(ang-0.42), ty - s*Math.sin(ang-0.42));
+      ctx.lineTo(tx - s*Math.cos(ang+0.42), ty - s*Math.sin(ang+0.42));
+      ctx.closePath();
+      ctx.fillStyle = hot ? cHi : cEdge;
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  const labeled = [];
+  for(const n of nodes){
+    if(!visible(n)) continue;
+    const p = toScreen(n), r = radius(n)*Math.min(1.6, Math.max(.7, view.k));
+    const hit = matches(n);
+    const dim = (focus && n.id!==focus && !nb.has(n.id)) || (query && !hit);
+    ctx.globalAlpha = dim ? 0.14 : 1;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,6.2832);
+    ctx.fillStyle = colorOf(n.type); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = n.id===sel ? cvar('--ink') : surf; ctx.stroke();
+    const showLbl = P.lbl ? (n.deg_in||0) >= P.lbl : r >= 8;
+    if(!dim && (showLbl || n.id===focus || hit)) labeled.push([n,p,r]);
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.font = '11px ' + cvar('--font');
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.lineWidth = 3; ctx.strokeStyle = cvar('--plane');
+  for(const [n,p,r] of labeled){
+    const t = n.id.replace(/^(project|feedback)_/,'').slice(0,26);
+    ctx.strokeText(t, p.x, p.y+r+4);
+    ctx.fillStyle = n.id===focus ? cvar('--ink') : cvar('--ink2');
+    ctx.fillText(t, p.x, p.y+r+4);
+  }
+}
+
+/* enquadra tudo o que está visível — o "recentralizar" do topo */
+function fit(){
+  const act = nodes.filter(visible);
+  if(!act.length) return;
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const n of act){ x0=Math.min(x0,n.x); y0=Math.min(y0,n.y); x1=Math.max(x1,n.x); y1=Math.max(y1,n.y); }
+  const pad = 60;
+  const k = Math.min((W-pad*2)/Math.max(1,x1-x0), (H-pad*2)/Math.max(1,y1-y0));
+  view.k = Math.max(0.2, Math.min(3, k));
+  view.x = -(x0+x1)/2*view.k; view.y = -(y0+y1)/2*view.k;
+  draw();
+}
+function center(id){
+  const n = byId[id]; if(!n) return;
+  view.x = -n.x*view.k; view.y = -n.y*view.k;
+  draw();
+}
+
+/* ====================== seleção / sidebar ====================== */
+function pick(sx,sy){
+  const w = toWorld(sx,sy);
+  let best=null, bd=Infinity;
+  for(const n of nodes){
+    if(!visible(n)) continue;
+    const r = radius(n) + 6/view.k;
+    const d = Math.hypot(n.x-w.x, n.y-w.y);
+    if(d < r && d < bd){ bd = d; best = n; }
+  }
+  return best;
+}
+
+function clearInfo(){
+  sel = null;
+  $('#info').innerHTML = '<div class="empty">Clique num nó para ver o fio, a descrição e os vizinhos.</div>';
+}
+
+function select(id){
+  sel = id;
+  const n = byId[id];
+  if(!n){ clearInfo(); return; }
+  const nbs = [...nbSet(id)].map(i => byId[i]).filter(Boolean).sort((a,b)=>b.deg_in-a.deg_in);
+  const out = new Set(liveLinks().filter(l=>l.source.id===id).map(l=>l.target.id));
+  const dt = n.t ? new Date(n.t).toLocaleDateString('pt-BR') : '—';
+  $('#info').innerHTML = `
+    <div class="type" style="color:${colorOf(n.type)}">● ${esc(n.type)}</div>
+    <div class="name">${esc(n.file)}</div>
+    ${n.description ? `<div class="desc">${esc(n.description)}</div>`
+                    : '<div class="empty">sem description no frontmatter</div>'}
+    <div class="facts">
+      <div class="f"><b>${n.deg_in}</b><span>citado por</span></div>
+      <div class="f"><b>${n.deg_out}</b><span>cita</span></div>
+      <div class="f"><b>${(n.bytes/1024).toFixed(1)}k</b><span>tamanho</span></div>
+      <div class="f"><b style="font-size:13px;padding-top:3px">${dt}</b><span>modificado</span></div>
+    </div>
+    ${nbs.length ? `<div class="nbh">Vizinhos diretos · ${nbs.length}</div>` + nbs.map(x =>
+        `<div class="nbi" data-go="${esc(x.id)}" style="border-left-color:${colorOf(x.type)}">
+           <span class="id">${esc(x.id)}</span>
+           <span class="k">${out.has(x.id) ? '→ cita' : '← cita-o'}</span></div>`).join('')
+      : '<div class="empty">Nenhum — este fio não puxa nem é puxado por ninguém.</div>'}
+    <button id="center">⌖ Centralizar no mapa</button>`;
+  $('#info').querySelectorAll('[data-go]').forEach(el =>
+    el.onclick = () => { select(el.dataset.go); center(el.dataset.go); });
+  const cb = $('#center'); if(cb) cb.onclick = () => center(id);
+  draw();
+}
+
+function showResults(){
+  const box = $('#results');
+  if(!query){ box.style.display='none'; box.innerHTML=''; return; }
+  const hits = nodes.filter(n => visible(n) && matches(n)).sort((a,b)=>b.deg_in-a.deg_in).slice(0,40);
+  box.style.display = 'block';
+  box.innerHTML = hits.length
+    ? hits.map(n => `<div class="hit" data-go="${esc(n.id)}"
+        style="border-left-color:${colorOf(n.type)}">${esc(n.id)}</div>`).join('')
+    : '<div class="hit" style="color:var(--muted)">nada encontrado</div>';
+  box.querySelectorAll('[data-go]').forEach(el =>
+    el.onclick = () => { select(el.dataset.go); center(el.dataset.go); });
+}
+
+function tip(n, e){
+  const el = $('#tip');
+  if(!n){ el.style.opacity = 0; return; }
+  el.innerHTML = `<b>${esc(n.file)}</b><span class="m">${esc(n.type)} · citado ${n.deg_in}× · cita ${n.deg_out}</span>`;
+  el.style.opacity = 1;
+  const pad = 14;
+  el.style.left = Math.min(e.clientX+pad, innerWidth - el.offsetWidth - 8) + 'px';
+  el.style.top  = Math.min(e.clientY+pad, innerHeight - el.offsetHeight - 8) + 'px';
+}
+
+/* ====================== controles ====================== */
+const SLIDERS = [
+  ['size','v_size', v=>nf(v,2)], ['edge','v_edge', v=>nf(v,2)],
+  ['lbl','v_lbl',  v=>String(v)], ['min','v_min',  v=>String(v)],
+  ['rep','v_rep',  v=>String(Math.round(v))], ['ctr','v_ctr', v=>nf(v,4)],
+  ['lnk','v_lnk',  v=>nf(v,3)], ['dst','v_dst',  v=>String(Math.round(v))],
+];
+
+function syncControls(){
+  for(const [k,vid,f] of SLIDERS){
+    const s = $('#s_'+k); if(s) s.value = String(P[k]);
+    const v = $('#'+vid); if(v) v.textContent = f(P[k]);
+  }
+  $('#arrows').checked = P.arrows;
+  $('#idx').checked = P.idx;
+}
+
+function wire(){
+  const c = $('#cv');
+
+  $('#search').oninput = e => { query = e.target.value.trim(); showResults(); draw(); };
+
+  $('#chips').addEventListener('click', e => {
+    const chip = e.target.closest('.chip'); if(!chip) return;
+    const t = chip.dataset.type;
+    typeOn[t] = !typeOn[t];
+    chip.setAttribute('aria-pressed', String(typeOn[t]));
+    if(sel && byId[sel] && !visible(byId[sel])) clearInfo();
+    renderFoot(); reheat();
+  });
+
+  const dateChanged = () => {
+    dFrom = $('#d0').value ? Date.parse($('#d0').value + 'T00:00:00') : null;
+    dTo   = $('#d1').value ? Date.parse($('#d1').value + 'T23:59:59') : null;
+    if(sel && byId[sel] && !visible(byId[sel])) clearInfo();
+    renderFoot(); reheat();
+  };
+  $('#d0').onchange = dateChanged;
+  $('#d1').onchange = dateChanged;
+  $('#dclr').onclick = () => { $('#d0').value=''; $('#d1').value=''; dateChanged(); };
+
+  $('#fit').onclick = fit;
+  $('#re').onclick  = reheat;
+
+  $('#dtog').onclick = () => {
+    const d = $('#design');
+    d.classList.toggle('min');
+    $('#dtog').textContent = d.classList.contains('min') ? '☰' : '✕';
+    $('#dtog').title = d.classList.contains('min') ? 'expandir' : 'recolher';
+  };
+
+  for(const [k] of SLIDERS){
+    const s = $('#s_'+k); if(!s) continue;
+    s.oninput = e => {
+      P[k] = +e.target.value;
+      const row = SLIDERS.find(r => r[0]===k);
+      $('#'+row[1]).textContent = row[2](P[k]);
+      // só força/visibilidade re-aquecem; tamanho e rótulo são só repintura
+      if(['rep','ctr','lnk','dst'].includes(k)) reheat();
+      else { if(k==='min'){ renderFoot(); } draw(); }
+    };
+  }
+  $('#arrows').onchange = e => { P.arrows = e.target.checked; draw(); };
+  $('#idx').onchange    = e => { P.idx = e.target.checked; renderFoot(); reheat(); };
+  $('#reset').onclick   = () => { P = {...DEF}; syncControls(); renderFoot(); reheat(); };
+
+  c.addEventListener('pointerdown', e => {
+    const n = pick(e.offsetX, e.offsetY);
+    if(n){ drag = n; select(n.id); } else { drag = 'pan'; clearInfo(); draw(); }
+    last = {x:e.offsetX, y:e.offsetY};
+    c.classList.add('dragging'); c.setPointerCapture(e.pointerId);
+    if(!anim) loop();
+  });
+  c.addEventListener('pointermove', e => {
+    if(drag){
+      if(drag === 'pan'){ view.x += e.offsetX-last.x; view.y += e.offsetY-last.y; }
+      else { const w = toWorld(e.offsetX, e.offsetY); drag.x=w.x; drag.y=w.y; drag.vx=drag.vy=0; }
+      last = {x:e.offsetX, y:e.offsetY};
+      draw();
+    } else {
+      const n = pick(e.offsetX, e.offsetY);
+      const id = n ? n.id : null;
+      if(id !== hover){ hover = id; draw(); }
+      tip(n, e);
+    }
+  });
+  const end = () => { drag = null; c.classList.remove('dragging'); };
+  c.addEventListener('pointerup', end);
+  c.addEventListener('pointercancel', end);
+  c.addEventListener('pointerleave', () => { hover=null; tip(null); draw(); });
+  c.addEventListener('wheel', e => {
+    e.preventDefault();
+    const w0 = toWorld(e.offsetX, e.offsetY);
+    view.k = Math.max(0.2, Math.min(4, view.k * (e.deltaY<0 ? 1.12 : 0.893)));
+    const w1 = toWorld(e.offsetX, e.offsetY);
+    view.x += (w1.x-w0.x)*view.k; view.y += (w1.y-w0.y)*view.k;
+    draw();
+  }, {passive:false});
+
+  addEventListener('keydown', e => {
+    if(e.key === 'Escape'){ clearInfo(); draw(); }
+    if(e.key === 'f' && e.target.tagName !== 'INPUT') fit();
+  });
+  addEventListener('resize', resize);
+}
+
+boot();
+</script>
+</body>
+</html>

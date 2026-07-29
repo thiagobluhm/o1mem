@@ -1,0 +1,30 @@
+# O(1)mem — dependencias de execucao
+#
+# NENHUMA. Os tres scripts do repo rodam com a biblioteca padrao do Python:
+#
+#   handover-nudge-hook/handover_nudge.py         os, sys, json, time
+#   adapters/hermes/nudge-watchdog/hermes_*.py    os, sys, json, time, sqlite3
+#   dashboard/abrir_dashboard.py                  os, sys, json, tempfile, webbrowser
+#
+# Isso e proposital: o hook roda a cada turno do agente, dentro do processo do
+# runtime (Claude Code / Hermes). Um requirements com dependencias transformaria
+# a instalacao do hook num problema de ambiente do usuario.
+#
+# Requisito unico: Python >= 3.8 (f-strings com format spec; sem walrus).
+#
+# Este arquivo existe para tornar isso EXPLICITO e para reservar o lugar
+# das dependencias de desenvolvimento abaixo.
+#
+# --- venv (opcional; so para desenvolver/testar) ---
+#   python -m venv .venv
+#   .venv\Scripts\activate      (Windows)   |   source .venv/bin/activate  (Linux/mac)
+#   pip install -r requirements.txt
+#
+# --- dev (descomente ao escrever a suite de testes) ---
+# pytest>=8.0
+
+# --- skills/rag (OPT-IN; so quem usa a busca semantica instala) ---
+# A regra "hook roda com stdlib" continua valendo: nada do caminho do hook
+# importa isto. A suite test_rag_offline.py tambem roda sem (fake embedder).
+# chromadb>=0.5
+# sentence-transformers>=3.0

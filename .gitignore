@@ -1,0 +1,42 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.o1mem/
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- O(1)mem: dados de sessao, NAO codigo ---
+# Logs de nudge: contem telemetria das SUAS sessoes (paths, nomes de projeto,
+# contagem de tokens). Sao a ENTRADA do dashboard, nunca artefato do repo.
+*.log
+handover-nudge.log
+handover-nudge-state/
+
+# Saida gerada pelo dashboard/abrir_dashboard.py (vive em %TEMP%, mas se
+# alguem rodar apontando pra ca, nao entra no commit).
+o1mem_dashboard.html
+
+# Grafo construido a partir da SUA memoria: carrega titulos, descricoes e o
+# fio de raciocinio dos projetos. Este repo e PUBLICO — o graph.json nunca
+# entra nele. E derivado: `python graph/o1mem_graph.py build` refaz em 1s.
+graph/graph.json
+o1mem_grafo.html
+
+# --- Editores / IDE ---
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- SO ---
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.DS_Store

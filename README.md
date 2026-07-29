@@ -6,7 +6,7 @@
 ---
 
 ![status](https://img.shields.io/badge/status-field--tested-green)
-![tool](https://img.shields.io/badge/runtime-Claude%20Code%20%2B%20Hermes-8A2BE2)
+![tool](https://img.shields.io/badge/runtime-Claude%20Code-8A2BE2)
 ![focus](https://img.shields.io/badge/focus-token%20economy-brightgreen)
 ![approach](https://img.shields.io/badge/chunking-agentic-blue)
 ![npm](https://img.shields.io/badge/npm-%40tbluhm82%2Fo1mem-CB3837)
@@ -136,7 +136,7 @@ O número que ele observa **não** é o total da janela — `system`, `tools`, `
   <img src="assets/handover-nudge-toast.png" alt="Toast nativo do Windows: 'Claude Code — hora de um /handover? A conversa cresceu ~504k tokens. Considere /handover antes do /clear.'" width="60%">
 </p>
 
-> O aviso chega como **toast nativo do sistema** (`notify_windows`, zero dependências) — você o vê mesmo de olho fora do terminal. Paridade nos dois runtimes (rótulo "Claude Code" ou "Hermes").
+> O aviso chega como **toast nativo do Windows** (`notify_windows`, zero dependências, via PowerShell) — você o vê mesmo de olho fora do terminal. Fail-open em Mac/Linux: sem toast nativo ainda, mas nunca quebra o turno.
 
 Duas travas o impedem de virar spam:
 
@@ -165,6 +165,10 @@ O índice quente (`MEMORY.md`) resolve o boot. Mas quando o acervo cresce, às v
 | `cold --days 30` | candidatos a decay: quente, tipo `project`, sem nenhuma citação e velho — **sugere, quem move é humano** |
 
 Tem também uma **UI autocontida** (`abrir_grafo.py`, zero CDN): tamanho do nó = quantas vezes é citado, arestas do índice desligadas por padrão (senão vira hairball), clique navega, busca destaca, chips filtram por tipo.
+
+<p align="center">
+  <img src="assets/graph-preview.png" alt="UI do grafo O(1)mem: 8 nós, 13 ligações, chips de filtro por tipo (project/feedback/index), painel Desenho com controles de força e tamanho, e um nó central 'cache_sessao_redis' conectando 4 outros nós — dados sintéticos de exemplo." width="85%">
+</p>
 
 Não entra no boot — o `MEMORY.md` continua sendo a entrada O(1). Detalhes em [`graph/README.md`](graph/README.md).
 
@@ -246,7 +250,7 @@ A tabela ali de cima é de *uma* sessão minha. O painel em [`dashboard/`](dashb
 python dashboard/abrir_dashboard.py
 ```
 
-O launcher acha os logs (`~/.claude/handover-nudge.log` e, se você roda no Hermes, `~/AppData/Local/hermes/handover-nudge.log`), embute os dados na página e abre no browser. Sem servidor, sem upload — `dashboard/index.html` também abre sozinho e aceita arrastar um log/CSV, para compartilhar.
+O launcher acha o log (`~/.claude/handover-nudge.log`), embute os dados na página e abre no browser. Sem servidor, sem upload — `dashboard/index.html` também abre sozinho e aceita arrastar um log/CSV, para compartilhar.
 
 O que ele mostra, direto do log:
 
@@ -317,29 +321,14 @@ o1mem/
 ├── dashboard/                       # painel HTML que lê o handover-nudge.log
 │   ├── abrir_dashboard.py
 │   └── index.html
-├── adapters/
-│   └── hermes/                    # porta para o Hermes Agent (async watchdog)
-│       ├── README.md
-│       ├── handover/SKILL.md
-│       ├── organizador-mem/SKILL.md
-│       └── nudge-watchdog/
 └── PORTABILITY.md                 # mapeamento de ferramentas — fonte única
 ```
 
 ---
 
-## 🔌 Roda em (sem lock-in)
+## 🔌 Sem lock-in de runtime
 
-O O(1)mem **não é do Claude Code** — é uma tese sobre onde o estado mora (índice barato sempre + arquivo caro sob demanda + teto O(1)). Isso independe de runtime.
-
-| Runtime | Onde | Gatilho |
-|---|---|---|
-| **Claude Code** | raiz do repo (implementação de referência) | hook `UserPromptSubmit` — **síncrono**, instantâneo |
-| **Hermes Agent** | [`adapters/hermes/`](adapters/hermes/) | cron watchdog — **assíncrono**, não bloqueia a conversa |
-
-As skills são as **mesmas** — muda o vocabulário de ferramentas (`Write`→`write_file`, `AskUserQuestion`→`clarify`, `/clear`→`/reset`…) e, no gatilho, o modelo de execução. A tradução completa e o que um runtime novo precisa ter estão em **[`PORTABILITY.md`](PORTABILITY.md)**.
-
-> A porta do Hermes traz uma **sacada e um preço honesto**: o watchdog async não bloqueia o caminho crítico (ganho), mas não é instantâneo e, com `deliver=local` no TUI, salva o aviso sem te notificar ativamente. Os trade-offs e as opções (disparar junto da compressão nativa, `deliver=telegram`, ou deixar manual) estão em [`adapters/hermes/README.md`](adapters/hermes/README.md) — nada varrido pra debaixo do tapete.
+O O(1)mem **não é do Claude Code** — é uma tese sobre onde o estado mora (índice barato sempre + arquivo caro sob demanda + teto O(1)). A implementação de referência aqui é pro Claude Code (hook `UserPromptSubmit`, síncrono, instantâneo); portar pra outro agente é câmbio de vocabulário de ferramentas (`Write`→`write_file`, `AskUserQuestion`→`clarify`, `/clear`→`/reset`…) e do modelo de execução do gatilho — o mapeamento completo está em **[`PORTABILITY.md`](PORTABILITY.md)**.
 
 ---
 

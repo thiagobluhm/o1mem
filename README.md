@@ -14,7 +14,7 @@
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 <p align="center">
-  <img src="assets/ciclo-token-economy-header-v9.jpg" alt="O(1)mem — Token Economy & Memory Flow. Gatilho de 80k tokens dispara a notificação 'Hora do Handover'. A conversa bruta e a janela de contexto grande passam por um funil (Claude) que separa em núcleo O(1) (concentrado, acesso rápido) e arquivo frio (comprimido, armazenamento de longo prazo). Isso alimenta o grafo de navegação da memória — wikilinks, contexto de projeto, log de decisões, trechos de código, referências futuras. Resultados: ~84% de economia de tokens, recuperação instantânea, cap O(1) + archive, handovers contínuos." width="100%">
+  <img src="assets/ciclo-token-economy-header-v9.jpg" alt="Gatilho Hook (80k tokens) dispara a notificação 'Hora do Handover'. Destilação e Cap O(1): 124k tokens da conversa viram 19k tokens, capacidade O(1). Alimenta o Grafo de Memória (wikilinks) e o Acervo & RAG (Cold Archive) — camada de memória e arquivamento. Resultados: Economia (~84%), Agilidade, Memorização, Fluidez." width="100%">
 </p>
 
 <p align="center"><sub><b>O(1)mem</b> — o nome é a tese: <code>O(1)</code> (com o <em>cap</em>, a memória cresce em tempo constante) + <code>mem</code> (memória). Simples por design.</sub></p>

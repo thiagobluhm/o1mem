@@ -39,7 +39,9 @@ function El(id) {
     classList: { _c: new Set(), add(c) { this._c.add(c); }, remove(c) { this._c.delete(c); },
                  toggle(c) { this._c.has(c) ? this._c.delete(c) : this._c.add(c); },
                  contains(c) { return this._c.has(c); } },
-    setAttribute() {}, getAttribute: () => null, addEventListener() {},
+    setAttribute() {}, getAttribute: () => null,
+    // grava o ultimo handler por evento, para o teste poder dispara-lo
+    _h: {}, addEventListener(ev, f) { this._h[ev] = f; },
     setPointerCapture() {}, closest: () => null, appendChild() {},
     getContext: () => ctx2d,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 1200, height: 700 }),
@@ -63,6 +65,7 @@ const doc = {
   querySelectorAll: () => [],
   documentElement: {},
   body: { innerHTML: '' },
+  addEventListener() {},
 };
 global.document = doc;
 global.window = { __O1MEM_GRAPH__: graph, devicePixelRatio: 2 };
@@ -92,8 +95,20 @@ const nWiki = graph.edges.filter((e) => e.kind === 'wiki').length;
 const zero = () => { rec.arc = rec.moveTo = rec.lineTo = rec.fill = rec.fillText = rec.strokeText = 0; };
 
 check('cabecalho com contagem', /\d+<\/b> n[oó]s/.test(store.hdr.innerHTML), store.hdr.innerHTML.replace(/<[^>]+>/g, ''));
-check('chips de tipo renderizados', /data-type=/.test(store.chips.innerHTML),
-      (store.chips.innerHTML.match(/data-type=/g) || []).length + ' tipos');
+check('um pill por tipo na barra de filtros', /data-act="toggle"/.test(store.fbar.innerHTML),
+      (store.fbar.innerHTML.match(/data-act="toggle"/g) || []).length + ' tipos');
+check('cada pill tem caret com checklist de nos', /data-act="open"/.test(store.fbar.innerHTML) &&
+      /data-panel=/.test(store.fbar.innerHTML) && /input type="checkbox" data-id=/.test(store.fbar.innerHTML),
+      (store.fbar.innerHTML.match(/data-id=/g) || []).length + ' nos listados');
+check('popover com Todos/Nenhum', /data-act="all"/.test(store.fbar.innerHTML) &&
+      /data-act="none"/.test(store.fbar.innerHTML));
+// o pill de PROJETO (collection) mora na mesma barra dos tipos, mas e escolha
+// unica (radio) — collections nunca se misturam
+check('pill de projeto na mesma barra, com radio', /data-act="openproj"/.test(store.fbar.innerHTML) &&
+      /type="radio" name="o1memproj"/.test(store.fbar.innerHTML),
+      (store.fbar.innerHTML.match(/data-slug=/g) || []).length + ' projeto(s)');
+check('rotulo de tipo nao colide com "Projeto"', !/>project</.test(store.fbar.innerHTML) &&
+      /Trabalho/.test(store.fbar.innerHTML));
 check('painel Desenho no HTML', /id="design"/.test(html));
 check('8 sliders de desenho/forcas', (html.match(/type="range"/g) || []).length === 8,
       (html.match(/type="range"/g) || []).length);
@@ -137,6 +152,23 @@ zero(); draw();
 check('restaurar padrao devolve todos os nos', rec.arc === graph.nodes.length,
       rec.arc + '/' + graph.nodes.length);
 
+// esconder UM no individual (checklist do caret) tira exatamente 1 do canvas —
+// disparado pelo caminho real: o handler `change` que a pagina registrou no #fbar
+const cbFake = { dataset: { id: graph.nodes[0].id }, checked: false };
+// closest() precisa ser EXATO: um fake que casa qualquer 'input[...]' faria o
+// checkbox de nó passar pelo ramo do radio de projeto e mascarar o teste.
+const evFake = { target: { closest: (s) =>
+  s === 'input[data-id]' ? cbFake : s === '.fitem' ? { dataset: { type: 'project' } } : null } };
+store.fbar._h.change(evFake);
+zero(); draw();
+check('esconder no individual remove 1 do canvas', rec.arc === graph.nodes.length - 1,
+      rec.arc + '/' + graph.nodes.length + ' com "' + graph.nodes[0].id + '" escondido');
+cbFake.checked = true;                       // religa o no
+store.fbar._h.change(evFake);
+zero(); draw();
+check('religar o no devolve todos', rec.arc === graph.nodes.length,
+      rec.arc + '/' + graph.nodes.length);
+
 // filtro de data
 const ds = graph.nodes.map((n) => Date.parse(n.mtime)).filter(Boolean).sort((a, b) => a - b);
 const cut = new Date(ds[Math.floor(ds.length / 2)]).toISOString().slice(0, 10);
@@ -170,7 +202,7 @@ check('busca devolve resultados', /data-go=/.test(store.results.innerHTML),
       (store.results.innerHTML.match(/data-go=/g) || []).length + ' hits para "gate"');
 
 // escaping: nada de < > " crus dentro do texto renderizado
-const raw = [info, store.results.innerHTML, store.chips.innerHTML, store.foot.innerHTML].join('');
+const raw = [info, store.results.innerHTML, store.fbar.innerHTML, store.foot.innerHTML].join('');
 const inner = [...raw.matchAll(/>([^<>]*)</g)].map((m) => m[1]);
 check('conteudo de texto escapado', inner.every((t) => !/["<>]/.test(t)),
       inner.length + ' trechos conferidos');

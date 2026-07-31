@@ -67,11 +67,16 @@ def write_page():
 
     html = open(INDEX, "r", encoding="utf-8").read()
     # injeta os dados ANTES da tag <script> principal (o global precisa existir
-    # quando o gancho de auto-carga rodar, no fim do script).
+    # quando o gancho de auto-carga rodar, no fim do script). O painel abre
+    # GLOBAL por padrao (todos os projetos + legado sem tag juntos) -- os
+    # chips de projeto (index.html) so restringem se o usuario clicar, nunca
+    # pre-selecionam sozinhos.
     if records and "<script>" in html:
         payload = json.dumps(records, ensure_ascii=False)
         html = html.replace(
-            "<script>", f"<script>window.__O1MEM_DATA__ = {payload};</script>\n<script>", 1
+            "<script>",
+            f"<script>window.__O1MEM_DATA__ = {payload};</script>\n<script>",
+            1,
         )
 
     with open(OUT, "w", encoding="utf-8") as f:
@@ -91,9 +96,13 @@ def write_sibling():
         sys.path.insert(0, gdir)
         import abrir_grafo          # noqa: E402
         import o1mem_graph          # noqa: E402
-        # não dá para perguntar qual projeto aqui; usa o de memória mais fresca.
+        # não dá para perguntar qual projeto aqui; usa o de memória mais fresca
+        # como DEFAULT selecionado -- mas passando `project=` (não `root=`), que
+        # ainda monta as outras collections e liga o seletor da UI. `root=`
+        # força modo single-project (sem picker), que era o bug: o grafo irmão
+        # do painel abria sempre travado no projeto mais fresco, sem trocar.
         pick = o1mem_graph.freshest_root()
-        return abrir_grafo.write_page(root=pick[1] if pick else None)[0]
+        return abrir_grafo.write_page(project=pick[0] if pick else None)[0]
     except BaseException:
         # BaseException de propósito: resolve_root sinaliza erro com SystemExit,
         # que não é Exception e derrubaria o painel inteiro por uma página irmã.

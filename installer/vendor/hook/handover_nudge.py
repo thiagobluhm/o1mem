@@ -227,6 +227,29 @@ def _should_rag_enrich():
     return False
 
 
+def _project_slug_from_transcript(transcript_path):
+    """Deriva o slug do projeto a partir do caminho do transcript.
+
+    O transcript vive em ~/.claude/projects/<slug>/<session_id>.jsonl --
+    o slug e o nome da pasta-mae, a mesma convencao usada por find_memory_roots().
+    """
+    try:
+        return os.path.basename(os.path.dirname(os.path.abspath(transcript_path)))
+    except Exception:
+        return None
+
+
+def _log_miss(reason, latency_ms=0, project_slug=None):
+    log_event({
+        "ts": int(time.time()),
+        "project": project_slug,
+        "event": "rag_enrichment",
+        "status": "miss",
+        "reason": reason,
+        "latency_ms": latency_ms,
+    })
+
+
 def _query_daemon(prompt_text, project_slug=None, k=3, timeout_sec=2):
     """Tenta fazer query no daemon via HTTP.
 
@@ -237,12 +260,14 @@ def _query_daemon(prompt_text, project_slug=None, k=3, timeout_sec=2):
     """
     try:
         if not os.path.exists(DAEMON_JSON):
+            _log_miss("no_daemon_json", project_slug=project_slug)
             return False, ""
 
         with open(DAEMON_JSON, "r", encoding="utf-8") as f:
             daemon_info = json.load(f)
         port = daemon_info.get("port")
         if not port:
+            _log_miss("no_port", project_slug=project_slug)
             return False, ""
 
         # Tenta /health com timeout muito curto pra detectar daemon morto
@@ -263,6 +288,7 @@ def _query_daemon(prompt_text, project_slug=None, k=3, timeout_sec=2):
             latency_ms = int((time.time() - t0) * 1000)
 
             if resp.status != 200:
+                _log_miss(f"http_{resp.status}", latency_ms, project_slug=project_slug)
                 return False, ""
 
             body = resp.read().decode("utf-8")
@@ -285,6 +311,7 @@ def _query_daemon(prompt_text, project_slug=None, k=3, timeout_sec=2):
                 enrichment = "Busca semântica local: os fios mais próximos do assunto atual são " + ", ".join(node_texts[:-1]) + (" e " if len(node_texts) > 1 else "") + node_texts[-1] + "."
                 log_event({
                     "ts": int(time.time()),
+                    "project": project_slug,
                     "event": "rag_enrichment",
                     "status": "hit",
                     "latency_ms": latency_ms,
@@ -294,6 +321,7 @@ def _query_daemon(prompt_text, project_slug=None, k=3, timeout_sec=2):
             else:
                 log_event({
                     "ts": int(time.time()),
+                    "project": project_slug,
                     "event": "rag_enrichment",
                     "status": "hit",
                     "latency_ms": latency_ms,
@@ -301,23 +329,36 @@ def _query_daemon(prompt_text, project_slug=None, k=3, timeout_sec=2):
                 })
                 return True, ""
         except Exception:
+            _log_miss("exception", project_slug=project_slug)
             return False, ""
     except Exception:
+        _log_miss("exception_outer", project_slug=project_slug)
         return False, ""
 
 
-def _spawn_daemon_detached():
-    """Spawna daemon detached. Fail-open: qualquer erro é engolido."""
+def _spawn_daemon_detached(project_slug=None):
+    """Spawna daemon detached. Fail-open: qualquer erro é engolido.
+
+    Roda o script diretamente (nao "-m o1mem_rag_daemon") porque o daemon nao
+    esta instalado como pacote importavel -- ele vive em rag/o1mem_rag_daemon.py,
+    irmao desta pasta (hook/) tanto no repo fonte quanto no vendor do installer.
+    O proprio daemon insere seu diretorio no sys.path ao rodar como script, entao
+    os imports de o1mem_rag/o1mem_graph resolvem sem precisar de "-m".
+    """
     try:
-        # Procura o script do daemon na instalação
-        # Ele deve estar em ~/.claude/scripts/o1mem/daemon.py ou similar
-        # Para simplicidade, apenas tentamos python -m o1mem_rag_daemon
-        # Em produção, o installer registrará o path corretamente
+        here = os.path.dirname(os.path.abspath(__file__))
+        daemon_script = os.path.normpath(os.path.join(here, "..", "rag", "o1mem_rag_daemon.py"))
+        if not os.path.isfile(daemon_script):
+            return
+
+        cmd = [sys.executable, daemon_script]
+        if project_slug:
+            cmd += ["--project", project_slug]
 
         if os.name == "nt":  # Windows
             # subprocess.Popen com DETACHED_PROCESS
             subprocess.Popen(
-                [sys.executable, "-m", "o1mem_rag_daemon"],
+                cmd,
                 creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                 close_fds=True,
                 stdout=subprocess.DEVNULL,
@@ -325,7 +366,7 @@ def _spawn_daemon_detached():
             )
         else:  # POSIX
             subprocess.Popen(
-                [sys.executable, "-m", "o1mem_rag_daemon"],
+                cmd,
                 start_new_session=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -371,6 +412,41 @@ def notify_windows(title, message):
         pass
 
 
+def notify_macos(title, message):
+    """Dispara uma notificacao nativa do macOS (Notification Center) via osascript.
+
+    Nao precisa instalar nada -- osascript vem no macOS. Fail-open: qualquer
+    erro e engolido (nunca afeta o turno).
+    """
+    try:
+        import subprocess
+        # AppleScript usa \" pra aspas dentro de string, nao ''. Sem escapar
+        # direito, um titulo/mensagem com aspas quebra o script inteiro e a
+        # notificacao simplesmente nao aparece -- sem erro visivel no turno.
+        t = title.replace('"', '\\"').replace("\n", " ")
+        m = message.replace('"', '\\"').replace("\n", " ")
+        script = f'display notification "{m}" with title "{t}"'
+        subprocess.run(["osascript", "-e", script], timeout=15, capture_output=True)
+    except Exception:
+        pass
+
+
+def notify_native(title, message):
+    """Escolhe o backend de notificacao nativa pelo SO corrente. Fail-open sempre.
+
+    Linux fica de fora por ora: notify-send precisa de um daemon (notification-
+    server) que nem toda distro/sessao tem por padrao -- diferente de
+    powershell.exe (Windows) e osascript (macOS), que sempre existem no SO.
+    """
+    try:
+        if sys.platform == "win32":
+            notify_windows(title, message)
+        elif sys.platform == "darwin":
+            notify_macos(title, message)
+    except Exception:
+        pass
+
+
 def main():
     if os.environ.get("CLAUDE_HANDOVER_NUDGE_DISABLE") == "1":
         return
@@ -383,6 +459,7 @@ def main():
     transcript = data.get("transcript_path")
     if not transcript or not os.path.exists(transcript):
         return
+    slug = _project_slug_from_transcript(transcript)
 
     event = data.get("hook_event_name") or ""
     state = load_state(sid)
@@ -402,6 +479,7 @@ def main():
         log_event({
             "ts": int(time.time()),
             "session_id": sid,
+            "project": slug,
             "event": "precompact_fired",
             "trigger": data.get("trigger"),  # "auto" | "manual"
             "growth": (c - b) if (b is not None and c is not None) else None,
@@ -448,6 +526,7 @@ def main():
     log_event({
         "ts": int(time.time()),
         "session_id": sid,
+        "project": slug,
         "event": "nudge_emitted",
         "growth": growth,
         "total": current,
@@ -457,10 +536,11 @@ def main():
         "model": model,
     })
 
-    # Toast nativo do Windows (canto da tela) -- paridade com o watchdog do Hermes.
+    # Toast nativo (Windows/macOS) -- paridade com o watchdog do Hermes.
     # Alem do texto injetado no contexto, cutuca o usuario fora do terminal.
-    notify_windows(
-        "Claude Code — hora de um /handover?",
+    proj_display = slug if slug else "Projeto desconhecido"
+    notify_native(
+        f"Claude Code — {proj_display}",
         f"A conversa cresceu ~{growth_k}k tokens. Considere /handover antes do /clear.",
     )
 
@@ -484,12 +564,12 @@ Mecanica desta sessao, se for util: os avisos ficam silenciados quando o arquivo
         try:
             prompt_text = data.get("prompt", "")
             if prompt_text:
-                hit, enrichment = _query_daemon(prompt_text, k=3, timeout_sec=2)
+                hit, enrichment = _query_daemon(prompt_text, project_slug=slug, k=3, timeout_sec=2)
                 if enrichment:
                     ctx += f"\n\n{enrichment}"
                 elif not hit:
                     # Miss: spawna daemon pra proximo turno
-                    _spawn_daemon_detached()
+                    _spawn_daemon_detached(slug)
         except Exception:
             # Qualquer erro → silencioso, ctx segue como estava
             pass

@@ -53,6 +53,12 @@
   .ctrl select,.ctrl input{font:inherit;font-size:13.5px;padding:7px 10px;border-radius:9px;
     border:1px solid var(--border);background:var(--surface);color:var(--ink);min-width:180px}
   .ctrl select:focus,.ctrl input:focus{outline:none;border-color:var(--c1)}
+  /* filtro de data — mesmo padrao do grafo (o1mem_grafo.html), width menor por serem 2 lado a lado */
+  .ctrl .daterow{display:flex;align-items:center;gap:6px}
+  .ctrl input[type=date]{min-width:0;width:132px;color-scheme:inherit}
+  .ctrl .dclr{font:inherit;font-size:13px;padding:7px 10px;border-radius:9px;cursor:pointer;
+    border:1px solid var(--border);background:var(--surface);color:var(--ink2)}
+  .ctrl .dclr:hover{border-color:var(--c1);color:var(--ink)}
 
   /* upload */
   #drop{border:1.5px dashed var(--axis);border-radius:13px;padding:22px;text-align:center;
@@ -64,12 +70,19 @@
   .hidden{display:none}
 
   /* KPIs */
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px;margin-bottom:14px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px;margin:18px 0}
   .tile{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:13px 15px}
   .tile .lbl{font-size:11.5px;color:var(--ink2);margin-bottom:4px;display:flex;gap:5px;align-items:center}
   .tile .val{font-size:27px;font-weight:700;letter-spacing:-.8px;font-variant-numeric:tabular-nums;line-height:1.1}
   .tile .foot{font-size:11px;color:var(--muted);margin-top:3px}
   .tile.hero .val{color:var(--good)}
+  /* tile "Tempo de sessao": dois valores lado a lado, com/sem O(1)mem */
+  .split2{display:flex;gap:16px;margin-top:1px}
+  .s2col{display:flex;flex-direction:column}
+  .s2v{font-size:21px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.15}
+  .s2v.good{color:var(--good)}
+  .s2v.plain{color:var(--ink)}
+  .s2l{font-size:10.5px;color:var(--muted);margin-top:2px}
 
   /* gráficos */
   svg{display:block;font-family:var(--font);width:100%}
@@ -119,6 +132,18 @@
     background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 11px;
     font-size:12px;box-shadow:0 6px 18px rgba(0,0,0,.35);font-variant-numeric:tabular-nums}
   #tip b{display:block;font-family:var(--mono);margin-bottom:3px}
+
+  /* filtro por PROJETO em chips: o log de nudge e global (todo projeto/sessao
+     junto); sem isto o painel mistura tudo -- "escolher o que aparece" em vez
+     de embaralhado, mesmo padrao de chip do resto do produto. */
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);
+    background:var(--surface);color:var(--muted);border-radius:999px;padding:5px 12px;
+    font-size:12px;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+  .chip:hover{border-color:var(--c1)}
+  .chip.on{color:var(--ink);border-color:var(--c1);background:color-mix(in srgb,var(--c1) 12%,transparent)}
+  .chip .n{color:var(--muted);font-variant-numeric:tabular-nums}
+  .chip.on .n{color:var(--ink2)}
 </style>
 </head>
 <body>
@@ -135,6 +160,8 @@
     <input type="file" id="file" accept=".log,.jsonl,.json,.csv,.txt" class="hidden">
   </div>
 
+  <div id="projChips" class="chips hidden"></div>
+
   <div class="card">
     <div class="ctrls">
       <label class="ctrl">Modelo <span class="note">(preço input USD/1M)</span>
@@ -148,7 +175,15 @@
       <label class="ctrl">Câmbio USD→BRL
         <input id="fx" type="number" min="0" step="0.01" value="5.40">
       </label>
-      <p class="note" style="flex:1 1 220px">Só dois ajustes — o resto vem <b>do log</b>.</p>
+      <label class="ctrl">Período <span class="note">(data do aviso)</span>
+        <div class="daterow">
+          <input type="date" id="d0" aria-label="De" title="a partir de">
+          <span class="note">–</span>
+          <input type="date" id="d1" aria-label="Até" title="até">
+          <button class="dclr" id="dclr" title="limpar filtro de data">✕</button>
+        </div>
+      </label>
+      <p class="note" style="flex:1 1 220px">Só ajustes locais — o resto vem <b>do log</b>.</p>
     </div>
   </div>
 
@@ -161,6 +196,7 @@
       <li><b>Baseline</b> = o piso pago sempre (system + tools + memória + CLAUDE.md). É o <b>custo de retomar</b> — pago dos dois jeitos, então <b>não</b> entra como economia.</li>
       <li><b>R$</b> = Messages × preço <b>input</b> USD/1M do modelo × câmbio. O seletor é uma alavanca "e se fosse tal modelo?"; o câmbio é seu.</li>
       <li>⚠️ Contexto re-arrastado é re-lido como input, mas re-leitura cai no <b>cache</b> (~0,1×) — então o R$ é um <b>teto</b>, o pior caso sem cache.</li>
+      <li>⏱️ <b>Tempo de sessão</b> = extrapolação de TEMPO a partir de TOKENS: o Claude Code não corta por relógio, corta quando a janela de contexto enche. <b>Sem O(1)mem</b> (branco) é o teto de <b>UMA</b> sessão: pega o ritmo REAL entre dois avisos da mesma sessão e extrapola até um teto de janela (constante <code>WINDOW_CEILING</code> no código, hoje ~1M — aproximação, não o limite exato de todo modelo) — onde ela travaria se ninguém rodasse <code>/handover</code>+<code>/clear</code>. <b>Com O(1)mem</b> (verde) NÃO é um teto novo — não existe mais teto, esse é o ponto do produto. É o MÚLTIPLO do teto de 1 sessão que o seu dia mais puxado já superou de verdade: soma o tempo ativo (exclui vãos &gt; <code>ACTIVE_GAP_CAP_HOURS</code> entre avisos — hoje 2h, pausa ou virada de dia) em dias com 2+ sessões distintas, e divide pelo teto. Sessão com só 1 aviso, ou dia com só 1 sessão, não entram (sem 2º ponto no tempo não há ritmo pra medir).</li>
     </ul>
   </div>
 </div>
@@ -176,6 +212,137 @@ const cvar = n => getComputedStyle(document.documentElement).getPropertyValue(n)
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 let RECORDS = [];
+
+// Teto de janela usado p/ extrapolar "sem O(1)mem" -- aproximacao (1M e o
+// contexto longo mais comum hoje), nao o limite exato de todo modelo.
+const WINDOW_CEILING = 1000000;
+function median(arr){
+  const s=arr.slice().sort((a,b)=>a-b), n=s.length;
+  if(!n) return NaN;
+  return n%2 ? s[(n-1)/2] : (s[n/2-1]+s[n/2])/2;
+}
+function fmtDur(hours){
+  if(!isFinite(hours) || hours<0) return '—';
+  if(hours < 1) return Math.round(hours*60)+'min';
+  if(hours < 48) return hours.toFixed(1)+'h';
+  return (hours/24).toFixed(1)+'d';
+}
+/* Agrupa por sessao e ordena por ts -- precisa dos PONTOS individuais (nao o
+   pico agregado que bySession() guarda) pra medir ritmo real entre 2 avisos. */
+function sessionSeries(records){
+  const m = new Map();
+  for(const r of records){
+    if(!r.ts || !r.total) continue;
+    const arr = m.get(r.session_id) || [];
+    arr.push(r);
+    m.set(r.session_id, arr);
+  }
+  for(const arr of m.values()) arr.sort((a,b)=>a.ts-b.ts);
+  return m;
+}
+/* "Sem O(1)mem, quando bateria o teto?" -- extrapolacao pelo ritmo REAL
+   observado (delta de tokens / delta de tempo de relogio ENTRE dois avisos da
+   MESMA sessao). Sessao com só 1 aviso nao entra: sem um segundo ponto no
+   tempo nao ha ritmo pra medir, so um chute. */
+function estimateNoO1mem(records){
+  const out = [];
+  for(const [sid, arr] of sessionSeries(records)){
+    if(arr.length < 2) continue;
+    const first = arr[0], last = arr[arr.length-1];
+    const dt = last.ts-first.ts, dtok = last.total-first.total;
+    if(dt <= 0 || dtok <= 0) continue; // sem crescimento real medido, descarta
+    const ratePerSec = dtok/dt;
+    const remaining = WINDOW_CEILING - last.total;
+    const etaHours = remaining <= 0 ? 0 : remaining/ratePerSec/3600;
+    // durationHours = trecho REALMENTE observado entre 2 avisos da sessao;
+    // totalHours = duration + eta = ate onde ESSA sessao bateria o teto se
+    // ninguem rodasse /handover -- e o numero "sem O(1)mem".
+    const durationHours = dt/3600;
+    out.push({session_id:sid, rateHr: ratePerSec*3600, etaHours,
+               durationHours, totalHours: durationHours+etaHours,
+               ts:last.ts, model:last.model});
+  }
+  return out.sort((a,b)=>a.ts-b.ts);
+}
+
+/* "Com O(1)mem" NAO e um teto novo -- a tese do produto e que o teto deixa de
+   existir, entao inventar um numero fixo pra ele seria mentir. O que DA pra
+   provar com o log: em dias com 2+ sessoes distintas (evidencia real de
+   handover encadeando), quanto tempo ATIVO essa pessoa ficou trabalhando --
+   e quantas vezes isso ja passou do teto de UMA sessao (`totalHours`).
+   "Ativo" exclui vaos > ACTIVE_GAP_CAP_HOURS entre 2 avisos (pausa/virada de
+   dia) pra nao contar a madrugada dormindo como "trabalho continuo". */
+const ACTIVE_GAP_CAP_HOURS = 2;
+function dailyActive(records){
+  const byDay = new Map();
+  for(const r of records){
+    if(!r.ts) continue;
+    const d = new Date(r.ts*1000);
+    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const arr = byDay.get(key) || [];
+    arr.push(r);
+    byDay.set(key, arr);
+  }
+  const out = [];
+  for(const [day, arr] of byDay){
+    arr.sort((a,b)=>a.ts-b.ts);
+    const sessions = new Set(arr.map(r=>r.session_id));
+    if(sessions.size < 2) continue; // exige EVIDENCIA de handover encadeando 2+ sessoes
+    let hours = 0;
+    for(let i=1;i<arr.length;i++){
+      const gapH = (arr[i].ts-arr[i-1].ts)/3600;
+      if(gapH <= ACTIVE_GAP_CAP_HOURS) hours += gapH;
+    }
+    out.push({day, hours, sessions: sessions.size, ts: arr[arr.length-1].ts});
+  }
+  return out.sort((a,b)=>a.ts-b.ts);
+}
+
+// chave = segunda-feira (UTC) da semana do ts, pra agrupar "semanal" sem lib de datas
+function isoWeekKey(ts){
+  const d = new Date(ts*1000);
+  const day = (d.getUTCDay()+6)%7;
+  d.setUTCDate(d.getUTCDate()-day);
+  d.setUTCHours(0,0,0,0);
+  return d.toISOString().slice(0,10);
+}
+function weeklyRollup(estimates, activeDays, ceilingHours){
+  const m = new Map();
+  for(const e of estimates){
+    const wk = isoWeekKey(e.ts);
+    const g = m.get(wk) || {semHours:[], days:[]};
+    g.semHours.push(e.totalHours);
+    m.set(wk, g);
+  }
+  for(const d of activeDays){
+    const wk = isoWeekKey(d.ts);
+    const g = m.get(wk) || {semHours:[], days:[]};
+    g.days.push(d); // {day, hours, sessions, ts}
+    m.set(wk, g);
+  }
+  return [...m.entries()].sort((a,b)=> a[0]<b[0]?-1:1).map(([week,g])=>{
+    // "melhor dia" = maior tempo ativo da semana; o multiplo vem do MESMO dia,
+    // pra hora e multiplo na tabela sempre se referirem ao mesmo evento.
+    const best = g.days.length ? g.days.reduce((a,b)=> b.hours>a.hours?b:a) : null;
+    return {
+      week,
+      nSem: g.semHours.length, medSem: g.semHours.length ? median(g.semHours) : NaN,
+      nCom: g.days.length,
+      bestHours: best ? best.hours : NaN,
+      bestMult: (best && ceilingHours > 0) ? best.hours/ceilingHours : NaN,
+    };
+  });
+}
+function buildEtaTable(weeks){
+  const rows = weeks.slice().reverse().map(w=>`<tr><td>${esc(w.week)}</td>
+    <td>${w.nSem ? fmtDur(w.medSem) : '—'}</td>
+    <td>${isFinite(w.bestHours) ? fmtDur(w.bestHours) : '—'}</td>
+    <td>${isFinite(w.bestMult) ? w.bestMult.toFixed(1)+'×' : '—'}</td>
+    <td>${w.nSem} sessão(ões) · ${w.nCom} dia(s)</td></tr>`).join('');
+  $('#etaWeekly').innerHTML = `<div class="tblwrap"><table>
+    <thead><tr><th>Semana (seg.)</th><th>Sem O(1)mem</th><th>Com O(1)mem</th><th>Múltiplo</th><th>Amostra</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
 
 const MODEL_USD = { 'opus':5, 'fable':10, 'mythos':10, 'sonnet':3, 'haiku':1 };
 function usdForModel(m, def){
@@ -225,9 +392,45 @@ function normalize(raw){
       growth, total, baseline: base,
       ts: +(r.ts ?? r.timestamp ?? 0) || 0,
       threshold: +(r.threshold ?? 0) || 0,
-      model: r.model ?? r.modelo ?? ''
+      model: r.model ?? r.modelo ?? '',
+      project: r.project ?? r.projeto ?? null
     };
   }).filter(r=>r.growth>0);
+}
+
+/* ---------------- filtro por projeto ---------------- */
+// abre GLOBAL (tudo junto, inclusive legado sem tag) -- os chips so RESTRINGEM
+// se a pessoa clicar; o painel nunca pre-filtra sozinho.
+const NONE_KEY = '(sem projeto — legado)';
+const projectKey = r => r.project || NONE_KEY;
+let PROJECT_FILTER = null; // null = sem filtro = tudo
+let DATE_FILTER = { from: null, to: null }; // ms epoch, null = sem borda desse lado
+
+function renderChips(){
+  const host = $('#projChips');
+  const keys = [...new Set(RECORDS.map(projectKey))].sort();
+  // só 1 chave no total (tudo do mesmo projeto, ou tudo legado) -> nada pra
+  // escolher, esconde a barra e mostra tudo.
+  if(keys.length < 2){ host.classList.add('hidden'); host.innerHTML=''; PROJECT_FILTER=null; return; }
+  if(!PROJECT_FILTER) PROJECT_FILTER = new Set(keys); // default = tudo ligado (global)
+  host.classList.remove('hidden');
+  host.innerHTML = keys.map(p=>{
+    const n = RECORDS.filter(r=>projectKey(r)===p).length;
+    return `<button class="chip${PROJECT_FILTER.has(p)?' on':''}" data-p="${esc(p)}">${esc(p)} <span class="n">${n}</span></button>`;
+  }).join('');
+  host.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
+    const p = b.dataset.p;
+    if(PROJECT_FILTER.has(p)) PROJECT_FILTER.delete(p); else PROJECT_FILTER.add(p);
+    if(!PROJECT_FILTER.size) PROJECT_FILTER = new Set(keys); // nunca zero chips ligados
+    renderChips();
+    render();
+  });
+}
+function filtered(){
+  let r = PROJECT_FILTER ? RECORDS.filter(x=>PROJECT_FILTER.has(projectKey(x))) : RECORDS;
+  if(DATE_FILTER.from) r = r.filter(x=>x.ts*1000 >= DATE_FILTER.from);
+  if(DATE_FILTER.to)   r = r.filter(x=>x.ts*1000 <= DATE_FILTER.to);
+  return r;
 }
 function bySession(records){
   const m=new Map();
@@ -246,28 +449,58 @@ let SESSIONS = [], THR = 0;
 function render(){
   const fx=+$('#fx').value||0, usd=+$('#model').value||0;
   const perM=usd/1e6*fx;
-  const sessions=bySession(RECORDS);
+  const recs=filtered();
+  const sessions=bySession(recs);
   SESSIONS=sessions;
   const content=$('#content');
-  if(!sessions.length){ content.innerHTML='<div class="card"><div class="empty">Nenhum evento válido no arquivo.</div></div>'; return; }
+  if(!sessions.length){ content.innerHTML='<div class="card"><div class="empty">Nenhum evento válido no filtro atual.</div></div>'; return; }
 
   let sumMsg=0, sumBase=0, nBase=0;
   for(const s of sessions){ sumMsg+=s.peak; if(s.base>0){ sumBase+=s.base; nBase++; } }
   const avgBase = nBase ? Math.round(sumBase/nBase) : 0;
   const savedR = sumMsg*perM;
   const avgMsg = Math.round(sumMsg/sessions.length);
-  THR = Math.max(0, ...RECORDS.map(r=>r.threshold||0));
+  THR = Math.max(0, ...recs.map(r=>r.threshold||0));
+
+  const estimates = estimateNoO1mem(recs);
+  const ceilingHours = estimates.length ? median(estimates.map(e=>e.totalHours)) : NaN;
+  const activeDays = dailyActive(recs);
+  // "melhor dia" = maior tempo ativo observado com 2+ sessoes; o multiplo usa
+  // o MESMO dia, pra hora e multiplo no card sempre baterem entre si.
+  const bestDay = activeDays.length ? activeDays.reduce((a,b)=> b.hours>a.hours?b:a) : null;
+  const bestMult = (bestDay && ceilingHours > 0) ? bestDay.hours/ceilingHours : NaN;
 
   content.innerHTML = `
     <div class="kpis">
       <div class="tile"><div class="lbl">📁 Sessões</div><div class="val">${fmt(sessions.length)}</div>
-        <div class="foot">${fmt(RECORDS.length)} avisos no log</div></div>
+        <div class="foot">${fmt(recs.length)} avisos no filtro atual</div></div>
       <div class="tile hero"><div class="lbl">✂️ Conversa evitada</div><div class="val">${fmt(sumMsg)}</div>
         <div class="foot">média de ${fmt(avgMsg)} por sessão</div></div>
       <div class="tile"><div class="lbl">🧱 Baseline médio</div><div class="val">${fmt(avgBase)}</div>
         <div class="foot">o piso, pago sempre</div></div>
       <div class="tile hero"><div class="lbl">💰 Economia</div><div class="val">${brl(savedR)}</div>
         <div class="foot">teto, sem cache</div></div>
+      ${(() => {
+        // O multiplo so PROVA o argumento se >= 1x. Num recorte estreito (poucos
+        // dias no filtro), o "melhor dia" daquele recorte pode legitimamente nao
+        // superar o teto -- isso NAO e bug de conta, e falta de evidencia NAQUELE
+        // recorte. Cor e texto tem que refletir isso, senao o card afirma "ja
+        // passou o teto" com um numero < 1x embaixo -- contradicao visivel que
+        // parece dizer "o O(1)mem foi PIOR que nao usar", o oposto do argumento.
+        const bestOk = isFinite(bestMult) && bestMult >= 1;
+        const foot = bestDay
+          ? (bestOk
+              ? `seu dia mais puxado (${bestDay.day}, ${fmtDur(bestDay.hours)} ativo) já passou o teto de 1 sessão`
+              : `seu dia mais puxado neste recorte (${bestDay.day}, ${fmtDur(bestDay.hours)} ativo) ainda não passou o teto — amplie o período`)
+          : (estimates.length ? 'precisa 2+ sessões no mesmo dia' : 'precisa 2+ avisos numa sessão');
+        return `
+      <div class="tile"><div class="lbl">⏱️ Tempo de sessão</div>
+        <div class="split2">
+          <div class="s2col"><div class="s2v plain">${estimates.length ? fmtDur(ceilingHours) : '—'}</div><div class="s2l">sem O(1)mem</div></div>
+          <div class="s2col"><div class="s2v ${bestOk ? 'good' : 'plain'}">${isFinite(bestMult) ? bestMult.toFixed(1)+'×' : '—'}</div><div class="s2l">com O(1)mem</div></div>
+        </div>
+        <div class="foot">${foot}<br><span style="font-size:9.5px">*é uma aproximação</span></div></div>`;
+      })()}
     </div>
 
     <div class="card">
@@ -280,11 +513,18 @@ function render(){
       <div id="chart"></div>
       <button class="toggle" id="tblBtn">ver tabela</button>
       <div id="tbl" class="hidden"></div>
-    </div>`;
+    </div>
+
+    ${(estimates.length || activeDays.length) ? `
+    <div class="card">
+      <h2>Tempo de sessão, semana a semana <span class="note">— teto extrapolado do ritmo real; múltiplo = melhor dia com 2+ sessões naquela semana</span></h2>
+      <div id="etaWeekly"></div>
+    </div>` : ''}`;
 
   drawSplit(sumMsg, sumBase);
   drawChart(sessions);
   buildTable(sessions, perM);
+  if(estimates.length || activeDays.length) buildEtaTable(weeklyRollup(estimates, activeDays, ceilingHours));
   $('#tblBtn').onclick=()=>{
     const t=$('#tbl'); t.classList.toggle('hidden');
     $('#tblBtn').textContent = t.classList.contains('hidden') ? 'ver tabela' : 'ocultar tabela';
@@ -398,6 +638,10 @@ function buildTable(sessions, perM){
 function ingest(text, name){
   const isCSV=/\.csv$/i.test(name||'') || (!text.trim().startsWith('{') && text.includes(','));
   RECORDS = normalize(isCSV ? parseCSV(text) : parseJSONL(text));
+  PROJECT_FILTER = null; // arquivo novo -> filtros recalculam do zero
+  DATE_FILTER = { from: null, to: null };
+  const d0=$('#d0'), d1=$('#d1'); if(d0) d0.value=''; if(d1) d1.value='';
+  renderChips();
   render();
 }
 const drop=$('#drop'), file=$('#file');
@@ -412,6 +656,15 @@ drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(!f) return
 $('#model').onchange=()=>RECORDS.length&&render();
 $('#fx').oninput=()=>RECORDS.length&&render();
 
+const dateChanged = () => {
+  DATE_FILTER.from = $('#d0').value ? Date.parse($('#d0').value+'T00:00:00') : null;
+  DATE_FILTER.to   = $('#d1').value ? Date.parse($('#d1').value+'T23:59:59') : null;
+  if(RECORDS.length) render();
+};
+$('#d0').onchange = dateChanged;
+$('#d1').onchange = dateChanged;
+$('#dclr').onclick = () => { $('#d0').value=''; $('#d1').value=''; dateChanged(); };
+
 // o gráfico é responsivo: redesenha quando a largura muda
 let rt; addEventListener('resize', ()=>{ clearTimeout(rt);
   rt=setTimeout(()=>{ if(SESSIONS.length) drawChart(SESSIONS); }, 120); });
@@ -423,7 +676,7 @@ $('#demo').onclick=e=>{ e.preventDefault();
     {ts:1784762757,session_id:"b73bb128",growth:150941,total:192372,threshold:80000,model:"claude-opus-4-8"},
     {ts:1784700000,session_id:"a1f4c9d2",growth:88010,total:130120,threshold:80000,model:"claude-opus-4-8"}
   ];
-  RECORDS=normalize(demo); render();
+  RECORDS=normalize(demo); PROJECT_FILTER=null; renderChips(); render();
 };
 
 // AUTO-CARGA: se o launcher (abrir_dashboard.py) injetou window.__O1MEM_DATA__,
@@ -433,6 +686,7 @@ if (Array.isArray(window.__O1MEM_DATA__) && window.__O1MEM_DATA__.length){
   const m=(RECORDS.find(r=>r.model)||{}).model||'';
   const usd=usdForModel(m,0);
   if(usd){ const sel=$('#model'); if(sel) sel.value=String(usd); }
+  renderChips();
   render();
   const d=$('#drop'); if(d) d.style.display='none';
 }

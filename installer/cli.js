@@ -162,6 +162,9 @@ async function cmdInstall() {
     for (const r of skillResults) {
       if (r.status === 'installed') {
         console.log(`✅ skill "${r.name}" → ${r.path}`);
+      } else if (r.status === 'completed_missing') {
+        console.log(`✅ skill "${r.name}" completada (faltava ${r.files.join(', ')}) → ${r.path}`);
+        console.log(`   (o SKILL.md existente foi mantido — use --force para atualizá-lo)`);
       } else {
         console.log(`ℹ️  skill "${r.name}" já existia, mantida → ${r.path}`);
       }

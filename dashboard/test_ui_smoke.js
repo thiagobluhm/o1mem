@@ -86,10 +86,59 @@ const nSes = bySession(normalize(usingReal ? data : DEMO_FALLBACK)).length;
 console.log(`\nfonte: ${usingReal ? LOG : 'demo embutido'} · ${data.length || 4} eventos · ${nSes} sessoes\n`);
 
 const content = store.content.innerHTML;
-check('KPIs renderizados', (content.match(/class="tile/g) || []).length === 4,
+check('KPIs renderizados', (content.match(/class="tile/g) || []).length === 5,
       (content.match(/class="tile/g) || []).length + ' cards');
 check('area de upload escondida com dados injetados', !usingReal || store.drop.style.display === 'none');
 check('link para o grafo', /o1mem_grafo\.html/.test(html));
+
+// estimativa "sem O(1)mem": recalcula pelo mesmo caminho da pagina e confere
+// que o valor batido no card confere com o metodo (ritmo real entre 2 avisos
+// da mesma sessao, nunca negativo, e nunca > que a janela inteira).
+const normRecs = normalize(usingReal ? data : DEMO_FALLBACK);
+const estimates = estimateNoO1mem(normRecs);
+const sessoesComRitmo = [...sessionSeries(normRecs).values()].filter((a) => a.length >= 2).length;
+check('estimativa so usa sessoes com 2+ avisos', estimates.length <= sessoesComRitmo,
+      `${estimates.length} estimativa(s) / ${sessoesComRitmo} sessao(oes) elegivel(is)`);
+check('ETA sempre finito e >= 0', estimates.every((e) => isFinite(e.etaHours) && e.etaHours >= 0));
+check('trecho observado <= projecao ate o teto',
+      estimates.every((e) => e.durationHours <= e.totalHours + 1e-9));
+
+// "com O(1)mem": dias com 2+ sessoes distintas, tempo ativo (gaps <= cap),
+// e o multiplo tem que vir do MESMO dia que o "melhor dia" do card.
+const activeDays = dailyActive(normRecs);
+check('dailyActive so entra dia com 2+ sessoes distintas',
+      activeDays.every((d) => d.sessions >= 2));
+check('tempo ativo sempre >= 0', activeDays.every((d) => d.hours >= 0));
+const ceilingHours = estimates.length ? median(estimates.map((e) => e.totalHours)) : NaN;
+const bestDay = activeDays.length ? activeDays.reduce((a, b) => (b.hours > a.hours ? b : a)) : null;
+const bestMult = bestDay && ceilingHours > 0 ? bestDay.hours / ceilingHours : NaN;
+
+const anyData = estimates.length || activeDays.length;
+if (anyData) {
+  check('card "Tempo de sessao" presente no HTML', /Tempo de sess.o, semana a semana/.test(content));
+  const weeks = weeklyRollup(estimates, activeDays, ceilingHours);
+  check('rollup semanal cobre todas as estimativas (sem O(1)mem)',
+        weeks.reduce((a, w) => a + w.nSem, 0) === estimates.length,
+        `${weeks.reduce((a, w) => a + w.nSem, 0)}/${estimates.length}`);
+  check('rollup semanal cobre todos os dias ativos (com O(1)mem)',
+        weeks.reduce((a, w) => a + w.nCom, 0) === activeDays.length,
+        `${weeks.reduce((a, w) => a + w.nCom, 0)}/${activeDays.length}`);
+  check('multiplo do card bate com o melhor dia observado',
+        !isFinite(bestMult) || (content.includes(bestMult.toFixed(1) + '×')),
+        isFinite(bestMult) ? bestMult.toFixed(1) + '×' : '—');
+} else {
+  check('sem dado -> card nao aparece', !/Tempo de sess.o, semana a semana/.test(content));
+}
+
+// Regressao real: com filtro de data estreito, o "melhor dia" do recorte pode
+// legitimamente dar < 1x (nao ha 2+ dias suficientes pra provar o argumento).
+// O bug reportado foi o card afirmar "ja passou o teto" com 0.9x embaixo --
+// contradicao visivel que parece dizer "O(1)mem foi PIOR que nao usar".
+// Prova que o guard existe: cor e texto sao CONDICIONAIS ao multiplo, nao fixos.
+check('cor/texto do multiplo sao condicionais (nao afirmam "passou o teto" com <1x)',
+      /const bestOk = isFinite\(bestMult\) && bestMult >= 1/.test(js) &&
+      /\$\{bestOk \? 'good' : 'plain'\}/.test(js) &&
+      /ainda n.o passou o teto/.test(js));
 
 // barra empilhada: 2 segmentos, e os flex somam 100
 const segs = [...store.split.innerHTML.matchAll(/flex:([\d.]+)/g)].map((m) => +m[1]);

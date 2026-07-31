@@ -1,0 +1,82 @@
+name: Bug report
+description: Something in O(1)mem behaves differently than documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. One request before you paste anything:
+
+        **Do not include real memory content.** Handovers and `MEMORY.md` files usually
+        hold private project detail. Redact node names, file paths, and client identifiers,
+        or reproduce the problem on a throwaway project instead.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which part?
+      options:
+        - handover (skill)
+        - retomar (skill)
+        - organizador-mem (skill)
+        - handover-nudge-hook
+        - rag (semantic search)
+        - graph
+        - dashboard
+        - npm installer (@tbluhm82/o1mem)
+        - not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+      description: Include the exact command you ran and its output, redacted as needed.
+      placeholder: |
+        I ran: python o1mem_rag.py --project X index
+        I expected: the handovers to be indexed
+        What happened: chunks stayed at 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11 / macOS 14.5 / Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Python and Node versions
+      description: "Output of `python --version` and `node --version`."
+      placeholder: "Python 3.12.2 / Node v22.14.0"
+    validations:
+      required: true
+
+  - type: input
+    id: package
+    attributes:
+      label: Install method and version
+      description: "npm package version (`o1mem --version`), or the commit SHA if installed from source."
+      placeholder: "@tbluhm82/o1mem 0.1.8"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed private memory content from everything I pasted above.
+          required: true
+        - label: I checked that this is not already reported in an open issue.
+          required: true

@@ -1,0 +1,61 @@
+name: Calibration report
+description: Share the numbers you measured — especially if they disagree with the README.
+labels: ["calibration"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every percentage in the README comes from a single observed session (`n=1`) and is
+        labeled as an order of magnitude, not a promise. This template exists to turn that
+        into a real range.
+
+        **Numbers that disagree with mine are more useful than numbers that agree.** A
+        report saying "I only saved 30%" tells future readers more than ten confirmations.
+
+        You can read these figures off Claude Code's *Context usage* panel, or run
+        `python dashboard/abrir_dashboard.py` to have them computed from your own log.
+
+  - type: textarea
+    id: numbers
+    attributes:
+      label: Your measurements
+      description: Leave out anything you did not measure — blanks are better than guesses.
+      value: |
+        | | Bloated session | After /clear | After resume |
+        |---|---|---|---|
+        | Total window | | | |
+        | `Messages` (conversation) | | | |
+        | `MEMORY.md` (index) | | | |
+    validations:
+      required: true
+
+  - type: input
+    id: sessions
+    attributes:
+      label: How many sessions is this based on?
+      placeholder: "1 session / 12 sessions over 3 weeks"
+    validations:
+      required: true
+
+  - type: input
+    id: satellite_rate
+    attributes:
+      label: "If you use organizador-mem: what share of sessions open at least one satellite doc?"
+      description: "This is the `p` in the README's savings formula. I measured p≈0.50."
+      placeholder: "roughly 3 in 10"
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What kind of project?
+      description: >
+        Size and shape matter for interpreting the numbers — how large was your CLAUDE.md,
+        how many memory files, monorepo or single service, and which model you run.
+    validations:
+      required: true
+
+  - type: textarea
+    id: mismatch
+    attributes:
+      label: Anything that did not match the documented behavior?
+      description: Optional, but this is often the most valuable field.

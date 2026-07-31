@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose a change to how O(1)mem works.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two constraints worth knowing before you write, because they rule out a whole class
+        of otherwise reasonable proposals:
+
+        - **Nothing new goes into the boot path.** `MEMORY.md` is the only thing loaded every
+          session, and keeping it O(1) is the entire thesis. Graph and RAG stay out of boot on
+          purpose.
+        - **Memory data never enters the repository.** Indexes and logs live under `~/.claude/`.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you hitting?
+      description: Describe the situation, not the solution. What did you need and not get?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you change?
+    validations:
+      required: true
+
+  - type: textarea
+    id: cost
+    attributes:
+      label: What does it cost per session?
+      description: >
+        If it adds tokens to every session, say roughly how many and what layer they land in
+        (boot index, on-demand file, or outside the model entirely). A feature that only costs
+        something when invoked is much easier to accept.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What did you consider and reject?

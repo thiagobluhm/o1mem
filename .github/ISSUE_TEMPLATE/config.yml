@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How to contribute
+    url: https://github.com/thiagobluhm/o1mem-skills/blob/main/CONTRIBUTING.md
+    about: Ground rules, repository layout, and how to run the tests.
+  - name: Documentação em português
+    url: https://github.com/thiagobluhm/o1mem-skills/blob/main/docs/README.ptbr.md
+    about: Versão em português deste projeto.

@@ -28,7 +28,7 @@ import webbrowser
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from o1mem_graph import build_graph, resolve_root, stats  # noqa: E402
+from o1mem_graph import build_graph, find_memory_roots, freshest_root, resolve_root, stats  # noqa: E402
 
 INDEX = os.path.join(HERE, "index.html")
 OUT = os.path.join(tempfile.gettempdir(), "o1mem_grafo.html")
@@ -39,12 +39,40 @@ def write_page(project=None, root=None):
     if not os.path.exists(INDEX):
         raise FileNotFoundError(INDEX)
 
-    slug, memroot = resolve_root(project, root)
+    if not project and not root:
+        # Sem escolha explicita: a UI tem seletor de projeto agora, entao
+        # ambiguidade nao e mais erro fatal aqui (so no CLI puro, que segue
+        # estrito por desenho) -- abre no mais fresco e o usuario troca na tela.
+        pick = freshest_root()
+        if not pick:
+            raise SystemExit("ERRO: nenhuma pasta memory/ encontrada.")
+        slug, memroot = pick
+    else:
+        slug, memroot = resolve_root(project, root)
     g = build_graph(memroot, slug)
 
+    # Cada projeto e uma COLLECTION separada -- nunca mescladas num so grafo
+    # (colisao de ids entre projetos criaria vizinho falso). O custo de montar
+    # todas e baixo (so parser de .md, sem embedding), entao o seletor da UI
+    # troca de collection sem reabrir o launcher. Se um --root direto foi
+    # passado (pasta fora de ~/.claude/projects), so essa entra na lista.
+    if root:
+        graphs = {slug: g}
+    else:
+        graphs = {slug: g}
+        for other_slug, other_root in find_memory_roots():
+            if other_slug == slug:
+                continue
+            try:
+                graphs[other_slug] = build_graph(other_root, other_slug)
+            except OSError:
+                continue
+
     html = open(INDEX, "r", encoding="utf-8").read()
-    inject = "<script>window.__O1MEM_GRAPH__ = %s;</script>\n<script>" % json.dumps(
-        g, ensure_ascii=False
+    inject = (
+        "<script>window.__O1MEM_GRAPHS__ = %s;"
+        "window.__O1MEM_GRAPH__ = window.__O1MEM_GRAPHS__[%s];</script>\n<script>"
+        % (json.dumps(graphs, ensure_ascii=False), json.dumps(slug, ensure_ascii=False))
     )
     if "<script>" in html:
         html = html.replace("<script>", inject, 1)

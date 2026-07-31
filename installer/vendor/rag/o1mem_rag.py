@@ -221,16 +221,25 @@ def index(slug: str, root: str, model_name: str, full: bool = False,
     col = get_collection(slug)
     chunks = collect_chunks(root, handovers_dir)
 
+    # Sem a pasta de handovers, o acervo FRIO nao entra em `chunks` -- e como o
+    # prune deriva de `current_ids`, os chunks de handover ja indexados viravam
+    # to_delete e sumiam calados. Ausencia da pasta significa "nao mexe nesse
+    # corpus", nunca "apaga". So um --full explicito zera tudo.
+    cold_blind = not (handovers_dir and os.path.isdir(handovers_dir))
+
     if full:
         existing_ids = col.get(include=[])["ids"]
         if existing_ids:
             col.delete(ids=existing_ids)
         stale = {}
+        protected = set()
     else:
         got = col.get(include=["metadatas"])
         stale = {i: (m or {}).get("sha", "") for i, m in zip(got["ids"], got["metadatas"])}
+        protected = {i for i, m in zip(got["ids"], got["metadatas"])
+                     if cold_blind and (m or {}).get("kind") == "handover"}
 
-    current_ids = {c["id"] for c in chunks}
+    current_ids = {c["id"] for c in chunks} | protected
     to_delete = [i for i in stale if i not in current_ids]
     to_embed = [c for c in chunks if stale.get(c["id"]) != c["meta"]["sha"]]
 
@@ -318,6 +327,15 @@ def query(slug: str, root: str, text: str, k: int, model_name: str,
 # CLI
 # --------------------------------------------------------------------------
 def main(argv=None) -> int:
+    # O console do Windows abre em cp1252: imprimir um excerpt com emoji
+    # (os handovers usam 🔴/✅ a rodo) levantava UnicodeEncodeError e MATAVA
+    # o `query` no meio do resultado. Nao e cosmetico -- e a busca falhando.
+    for _s in (sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     ap = argparse.ArgumentParser(description="Busca semantica da memoria O(1)mem")
     ap.add_argument("--project", help="slug (ou parte dele) do projeto")
     ap.add_argument("--root", help="caminho direto para uma pasta memory/")

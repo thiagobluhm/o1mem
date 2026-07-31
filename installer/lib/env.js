@@ -56,7 +56,12 @@ function writeConfig(mode, provider) {
   const config = {
     mode,
     provider,
-    installed_at: new Date().toISOString()
+    installed_at: new Date().toISOString(),
+    // Onde o o1mem_rag.py vendorizado ficou. Sem isto, a skill `handover`
+    // (handover.py) não tem como achar o RAG numa instalação via npm — o
+    // pacote pode estar em qualquer node_modules ou no cache do npx — e a
+    // indexação do handover era silenciosamente pulada.
+    rag_cli: paths.ragCliPath()
   };
 
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf8');

@@ -55,19 +55,51 @@
     background:color-mix(in srgb,var(--accent) 16%,transparent)}
   a.btn{text-decoration:none;color:var(--ink2);display:inline-block}
   a.btn:hover{color:var(--ink)}
+  .hidden{display:none}
   .dates{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
 
-  /* ---------------- chips de tipo ---------------- */
-  .chips{display:flex;gap:7px;flex-wrap:wrap;padding:8px 14px;
+  /* ---------------- filtro por tipo, estilo Knox: um pill por tipo (liga/desliga
+     o tipo inteiro) + caret que abre a checklist dos nós individuais daquele
+     tipo (Todos/Nenhum + checkbox um a um) ---------------- */
+  .fbar{display:flex;flex-wrap:wrap;gap:8px;padding:8px 14px;
     border-bottom:1px solid var(--border);background:var(--surface)}
-  .chip{display:flex;align-items:center;gap:7px;font-size:12px;padding:4px 11px;
-    border-radius:999px;border:1px solid var(--border);background:var(--plane);
-    cursor:pointer;user-select:none;transition:opacity .15s}
-  .chip[aria-pressed="false"]{opacity:.38}
-  .chip .dot{width:9px;height:9px;border-radius:50%;flex:none}
-  .chip .n{color:var(--ink2)}
-  .chip[aria-pressed="true"] .n{color:var(--ink)}
-  .chip .c{font-variant-numeric:tabular-nums;color:var(--muted);font-size:11px}
+  .fitem{position:relative;display:inline-flex;align-items:stretch}
+  .fpill{display:flex;align-items:center;gap:7px;font:inherit;font-size:12.5px;
+    padding:6px 11px;border-radius:999px 0 0 999px;border:1px solid var(--border);
+    border-right:none;background:var(--plane);color:var(--ink);cursor:pointer;user-select:none}
+  .fpill:hover{border-color:var(--accent)}
+  .fpill.offt{opacity:.38}
+  /* o pill de Projeto nao tem caret irmao: fecha a borda e o raio dos dois lados */
+  .fpill.solo{border-radius:999px;border-right:1px solid var(--border)}
+  .fpill .k{color:var(--muted)}
+  .fpill .car{color:var(--muted);font-size:9px}
+  .fpill .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .fpill .n{color:var(--muted);font-variant-numeric:tabular-nums;font-size:11.5px}
+  .fcaret{display:flex;align-items:center;gap:4px;font:inherit;font-size:9px;
+    padding:0 9px;border-radius:0 999px 999px 0;border:1px solid var(--border);
+    background:var(--plane);color:var(--muted);cursor:pointer}
+  .fcaret:hover{border-color:var(--accent);color:var(--ink)}
+  .fcaret .cc{font-size:10.5px;font-variant-numeric:tabular-nums}
+  .fpanel{position:absolute;top:calc(100% + 8px);left:0;width:250px;z-index:6;
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    box-shadow:0 10px 30px rgba(0,0,0,.34);padding:12px}
+  .fpanel.hidden{display:none}
+  .fphead{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+  .fphead b{font-size:12.5px}
+  .fphead button{background:none;border:none;color:var(--muted);cursor:pointer;
+    font-size:15px;line-height:1;padding:0 2px}
+  .fphead button:hover{color:var(--ink)}
+  .fpqa{display:flex;gap:7px;margin-bottom:9px}
+  .fpqa button{flex:1;font:inherit;font-size:11.5px;padding:6px 0;border-radius:8px;
+    border:1px solid var(--border);background:var(--plane);color:var(--ink2);cursor:pointer}
+  .fpqa button:hover{border-color:var(--accent);color:var(--ink)}
+  .flist{max-height:260px;overflow-y:auto}
+  .trow{display:flex;align-items:center;gap:8px;padding:4px 2px;border-radius:6px;
+    cursor:pointer;font-size:12.5px;transition:opacity .15s}
+  .trow:hover{background:var(--surface2)}
+  .trow input{accent-color:var(--edge-hi);width:13px;height:13px;cursor:pointer;flex:none}
+  .trow .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .trow .n{flex:1;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
   /* ---------------- corpo ---------------- */
   .body{flex:1;display:flex;min-height:0;position:relative}
@@ -166,7 +198,7 @@
   <a class="btn" href="o1mem_dashboard.html">💰 Painel de Economia →</a>
 </div>
 
-<div class="chips" id="chips"></div>
+<div class="fbar" id="fbar"></div>
 
 <div class="body">
   <div id="stage">
@@ -211,9 +243,16 @@
 <div id="tip"></div>
 
 <script>
-const G = window.__O1MEM_GRAPH__ || null;
+let G = window.__O1MEM_GRAPH__ || null;
 const $ = s => document.querySelector(s);
 const TYPES = ['project','feedback','index','other'];
+/* Rótulo de tela ≠ nome do metadado. O `type: project` do frontmatter colide com
+   "Projeto" (a collection que o outro filtro escolhe) e a tela ficava com dois
+   controles chamados "project" querendo dizer coisas diferentes. O dado no disco
+   segue igual; só a etiqueta muda. */
+const TYPE_LABEL = { project:'Trabalho', feedback:'Regras', index:'Índice', other:'Outros' };
+const rot = t => TYPE_LABEL[t] || t;
+const shortSlug = s => String(s).replace(/^c--Projetos-/i, '');
 const cvar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const colorOf = t => cvar('--t-' + (TYPES.includes(t) ? t : 'other'));
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -227,17 +266,17 @@ const DEF = { size:1, edge:1, lbl:0, min:0, rep:760, ctr:0.0018, lnk:0.022, dst:
 let P = {...DEF};
 
 let nodes=[], links=[], byId={}, sel=null, hover=null;
-let typeOn={}, query='', dFrom=null, dTo=null;
+let typeOn={}, offNodes=new Set(), query='', dFrom=null, dTo=null;
 let view={x:0,y:0,k:1}, drag=null, last=null, anim=null, alpha=0;
 let W=0, H=0, cv, ctx, dpr=1, STATS=null;
 
 /* ====================== boot ====================== */
-function boot(){
-  if(!G || !G.nodes || !G.nodes.length){
-    document.body.innerHTML = '<div class="noboot">Nenhum grafo carregado.<br>' +
-      'Rode <code>python abrir_grafo.py</code> — ele constrói e injeta os dados sozinho.</div>';
-    return;
-  }
+/* Cada projeto e uma COLLECTION separada (window.__O1MEM_GRAPHS__[slug]) --
+   nunca mescladas num so grafo (colisao de ids entre projetos seria falso
+   vizinho). Trocar de projeto RECARREGA a collection inteira; so o `wire()`
+   (listeners genéricos de UI) roda uma vez, pra nao duplicar handler a cada
+   troca. */
+function applyGraph(){
   STATS = stats(G);
   nodes = G.nodes.map(n => ({...n,
     x:(Math.random()-.5)*420, y:(Math.random()-.5)*420, vx:0, vy:0,
@@ -246,13 +285,35 @@ function boot(){
   links = G.edges.map(e => ({source:byId[e.source], target:byId[e.target], kind:e.kind}))
                  .filter(l => l.source && l.target);
   TYPES.forEach(t => typeOn[t] = true);
+  offNodes = new Set();
+  sel = null; hover = null; query = ''; dFrom = null; dTo = null;
+  const s = $('#search'); if(s) s.value = '';
+  const d0 = $('#d0'); if(d0) d0.value = '';
+  const d1 = $('#d1'); if(d1) d1.value = '';
+  clearInfo();
 
   $('#hdr').innerHTML = `<b>${STATS.nodes}</b> nós · <b>${STATS.edges}</b> ligações`;
   renderChips();
   renderFoot();
-  wire();
   resize();
   reheat();
+}
+
+function switchProject(slug){
+  const all = window.__O1MEM_GRAPHS__ || {};
+  if(!all[slug]) return;
+  G = all[slug];
+  applyGraph();
+}
+
+function boot(){
+  if(!G || !G.nodes || !G.nodes.length){
+    document.body.innerHTML = '<div class="noboot">Nenhum grafo carregado.<br>' +
+      'Rode <code>python abrir_grafo.py</code> — ele constrói e injeta os dados sozinho.</div>';
+    return;
+  }
+  applyGraph();
+  wire();
 }
 
 function stats(g){
@@ -274,11 +335,69 @@ function stats(g){
     project:(g.meta && g.meta.project) || '' };
 }
 
+function activeTypes(){ return TYPES.filter(t => STATS.byType[t]); }
+const nodesOfType = t => nodes.filter(n => (TYPES.includes(n.type) ? n.type : 'other') === t)
+                              .slice().sort((a,b) => a.id.localeCompare(b.id));
+
+const caretHTML = t => {
+  const all = nodesOfType(t), off = all.filter(n => offNodes.has(n.id)).length;
+  return '▾' + (off ? `<span class="cc">${all.length - off}/${all.length}</span>` : '');
+};
+
+/* Um pill por TIPO (mesmo padrão do mapa do Knox): o pill liga/desliga o tipo
+   inteiro; o caret ao lado abre a checklist dos nós individuais daquele tipo
+   (Todos/Nenhum + um checkbox por memória). `offNodes` guarda os ids escondidos
+   um a um — é um conjunto único, não um controle por tipo. */
+/* Pill de PROJETO: escolhe de qual projeto é o grafo (a collection). Mora na
+   mesma barra dos tipos porque é o mesmo gesto ("o que aparece"), mas é
+   ESCOLHA ÚNICA (radio) — collections nunca se misturam, senão id repetido
+   entre projetos criaria vizinho falso. */
+function projPillHTML(){
+  const all = window.__O1MEM_GRAPHS__ || {};
+  const cur = (G && G.meta && G.meta.project) || '';
+  const slugs = Object.keys(all).length ? Object.keys(all).sort() : (cur ? [cur] : []);
+  if(!slugs.length) return '';
+  return `<span class="fitem" data-kind="proj">
+    <button class="fpill solo" data-act="openproj" aria-haspopup="true">
+      <span class="k">Projeto</span> <b>${esc(shortSlug(cur))}</b> <span class="car">▾</span>
+    </button>
+    <div class="fpanel hidden" data-panel="__proj__">
+      <div class="fphead"><b>Projeto</b><button data-act="close" title="fechar">✕</button></div>
+      <div class="flist">${slugs.map(s => `
+        <label class="trow">
+          <input type="radio" name="o1memproj" data-slug="${esc(s)}" ${s===cur?'checked':''}>
+          <span class="n" title="${esc(s)}">${esc(shortSlug(s))}</span>
+        </label>`).join('')}</div>
+    </div>
+  </span>`;
+}
+
 function renderChips(){
-  $('#chips').innerHTML = TYPES.filter(t => STATS.byType[t]).map(t =>
-    `<div class="chip" data-type="${t}" role="button" aria-pressed="true" tabindex="0">
-       <span class="dot" style="background:${colorOf(t)}"></span>
-       <span class="n">${t}</span><span class="c">${STATS.byType[t]}</span></div>`).join('');
+  $('#fbar').innerHTML = projPillHTML() + activeTypes().map(t => {
+    const all = nodesOfType(t);
+    return `<span class="fitem" data-type="${t}">
+      <button class="fpill${typeOn[t] ? '' : ' offt'}" data-act="toggle" data-t="${t}"
+              aria-pressed="${!!typeOn[t]}">
+        <span class="dot" style="background:${colorOf(t)}"></span>${rot(t)}
+        <span class="n">${all.length}</span>
+      </button>
+      <button class="fcaret" data-act="open" data-t="${t}"
+              title="escolher quais (${t})">${caretHTML(t)}</button>
+      <div class="fpanel hidden" data-panel="${t}">
+        <div class="fphead"><b>${rot(t)}</b><button data-act="close" title="fechar">✕</button></div>
+        <div class="fpqa">
+          <button data-act="all" data-t="${t}">Todos</button>
+          <button data-act="none" data-t="${t}">Nenhum</button>
+        </div>
+        <div class="flist">${all.map(n => `
+          <label class="trow">
+            <input type="checkbox" data-id="${esc(n.id)}" ${offNodes.has(n.id) ? '' : 'checked'}>
+            <span class="dot" style="background:${colorOf(t)}"></span>
+            <span class="n" title="${esc(n.id)}">${esc(n.id)}</span>
+          </label>`).join('')}</div>
+      </div>
+    </span>`;
+  }).join('');
 }
 
 function renderFoot(){
@@ -294,6 +413,7 @@ function renderFoot(){
 /* ====================== visibilidade / simulação ====================== */
 function visible(n){
   if(typeOn[TYPES.includes(n.type)?n.type:'other'] === false) return false;
+  if(offNodes.has(n.id)) return false;
   if((n.deg_in||0) < P.min && n.type !== 'index') return false;
   if(dFrom && n.t && n.t < dFrom) return false;
   if(dTo && n.t && n.t > dTo) return false;
@@ -469,7 +589,7 @@ function select(id){
   const out = new Set(liveLinks().filter(l=>l.source.id===id).map(l=>l.target.id));
   const dt = n.t ? new Date(n.t).toLocaleDateString('pt-BR') : '—';
   $('#info').innerHTML = `
-    <div class="type" style="color:${colorOf(n.type)}">● ${esc(n.type)}</div>
+    <div class="type" style="color:${colorOf(n.type)}">● ${esc(rot(n.type))}</div>
     <div class="name">${esc(n.file)}</div>
     ${n.description ? `<div class="desc">${esc(n.description)}</div>`
                     : '<div class="empty">sem description no frontmatter</div>'}
@@ -507,7 +627,7 @@ function showResults(){
 function tip(n, e){
   const el = $('#tip');
   if(!n){ el.style.opacity = 0; return; }
-  el.innerHTML = `<b>${esc(n.file)}</b><span class="m">${esc(n.type)} · citado ${n.deg_in}× · cita ${n.deg_out}</span>`;
+  el.innerHTML = `<b>${esc(n.file)}</b><span class="m">${esc(rot(n.type))} · citado ${n.deg_in}× · cita ${n.deg_out}</span>`;
   el.style.opacity = 1;
   const pad = 14;
   el.style.left = Math.min(e.clientX+pad, innerWidth - el.offsetWidth - 8) + 'px';
@@ -536,13 +656,59 @@ function wire(){
 
   $('#search').oninput = e => { query = e.target.value.trim(); showResults(); draw(); };
 
-  $('#chips').addEventListener('click', e => {
-    const chip = e.target.closest('.chip'); if(!chip) return;
-    const t = chip.dataset.type;
-    typeOn[t] = !typeOn[t];
-    chip.setAttribute('aria-pressed', String(typeOn[t]));
+  // barra de filtros (delegação: renderChips() troca o innerHTML a cada
+  // aplicação de grafo, mas o listener no container sobrevive)
+  const bar = $('#fbar');
+  const afterFilter = () => {
     if(sel && byId[sel] && !visible(byId[sel])) clearInfo();
     renderFoot(); reheat();
+  };
+  const closePanels = () =>
+    bar.querySelectorAll('.fpanel').forEach(p => p.classList.add('hidden'));
+  const updateCaret = t => {
+    const car = bar.querySelector(`.fcaret[data-t="${t}"]`);
+    if(car) car.innerHTML = caretHTML(t);
+  };
+
+  bar.addEventListener('click', e => {
+    const btn = e.target.closest('[data-act]'); if(!btn) return;
+    const act = btn.dataset.act, t = btn.dataset.t;
+    if(act === 'toggle'){          // pill: liga/desliga o tipo inteiro
+      typeOn[t] = !typeOn[t];
+      renderChips(); afterFilter();
+    } else if(act === 'openproj'){ // pill de projeto: abre a lista de collections
+      const p = bar.querySelector('[data-panel="__proj__"]');
+      const wasOpen = p && !p.classList.contains('hidden');
+      closePanels();
+      if(p && !wasOpen) p.classList.remove('hidden');
+    } else if(act === 'open'){     // caret: abre a checklist daquele tipo
+      const p = bar.querySelector(`[data-panel="${t}"]`);
+      const wasOpen = p && !p.classList.contains('hidden');
+      closePanels();
+      if(p && !wasOpen) p.classList.remove('hidden');
+    } else if(act === 'close'){
+      closePanels();
+    } else if(act === 'all' || act === 'none'){
+      nodesOfType(t).forEach(n => act === 'all' ? offNodes.delete(n.id) : offNodes.add(n.id));
+      const p = bar.querySelector(`[data-panel="${t}"]`);
+      if(p) p.querySelectorAll('input[data-id]').forEach(cb => cb.checked = act === 'all');
+      updateCaret(t); afterFilter();
+    }
+  });
+
+  bar.addEventListener('change', e => {
+    const rd = e.target.closest('input[data-slug]');
+    // trocar de projeto recarrega a collection inteira; applyGraph() redesenha
+    // a barra do zero, o que ja fecha o painel.
+    if(rd){ switchProject(rd.dataset.slug); return; }
+    const cb = e.target.closest('input[data-id]'); if(!cb) return;
+    cb.checked ? offNodes.delete(cb.dataset.id) : offNodes.add(cb.dataset.id);
+    const t = e.target.closest('.fitem').dataset.type;
+    updateCaret(t); afterFilter();
+  });
+
+  document.addEventListener('click', e => {
+    if(!e.target.closest('.fitem')) closePanels();
   });
 
   const dateChanged = () => {

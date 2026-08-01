@@ -19,7 +19,17 @@ Detalhe mora só no handover. **Nunca duplique.**
 
 > **Onde o handover mora — e por que não é dentro do projeto.** Sempre em `~/.claude/projects/<slug>/handovers/`, ao lado de `memory/`, derivado do **slug** e nunca do CWD. O `handover.py` **trava** isso; você não escolhe o caminho. Antes era `<raiz>/documentacao`, o que fazia o local depender de onde a sessão abriu (um projeto com handovers em `backend/documentacao` ficou com dois lugares e nenhum certo) e punha texto com nome de cliente dentro do repo. Pastas legadas são **lidas** — o `collect` avisa que existem e que estão fora do corpus indexado — e nunca escritas; `python handover.py migrate` as esvazia.
 
-## O fluxo — 4 passos, nesta ordem
+## O fluxo — 5 passos, nesta ordem
+
+### 0. Pergunte o escopo, antes de tocar em qualquer arquivo
+
+`AskUserQuestion`, uma pergunta, três opções mutuamente exclusivas:
+
+- **A — Handover simples**: só grava handover + memória.
+- **B — Handover + commit**: grava e roda `git commit` das mudanças pendentes.
+- **C — Handover + commit + push**: B, e depois `git push` do remote/branch atual.
+
+A resposta decide o que o Passo 5 faz. Não assuma — cada saída pode ter escopo diferente.
 
 ### 1. `TodoWrite` com estas 4 etapas, antes de qualquer outra coisa
 Progresso invisível é o defeito nº 1 desta skill. Marque `in_progress`/`completed` **um por vez, em tempo real** — nunca um lote no fim.
@@ -75,9 +85,11 @@ Depois: crie/atualize **1** `project_*.md` em `memory/` com o fato durável apon
 
 > **Invariante do `MEMORY.md`:** densifique a prosa, mas **nunca drope um `[[link]]`** — cada um é load-bearing pro protocolo de save achar o arquivo que cobre um fato. Para economizar, encurte o TEXTO do link (`[↗](x.md)`), não o remova.
 
-## Passo 5 — Libere o /clear
+## Passo 5 — Execute o escopo do Passo 0, depois libere o /clear
 
-Diga que é **seguro dar `/clear`**, o que foi gravado, e em uma frase qual será a primeira ação da retomada. Termine com:
+Se a resposta do Passo 0 foi **B** ou **C**: rode `git add` do que mudou (handover, memória, e o trabalho da sessão) e `git commit` com mensagem que descreve a sessão — confira antes que a mensagem não cite dado sensível (ver [[feedback_nao_citar_cliente_em_mensagem_de_commit_publico]]). Se foi **C**: depois do commit, `git push` do remote/branch em uso. Se **A**: nenhum dos dois.
+
+Diga que é **seguro dar `/clear`**, o que foi gravado (e commitado/pushado, se aplicável), e em uma frase qual será a primeira ação da retomada. Termine com:
 
 > PRONTO E OPERANTE THIAGO!
 >

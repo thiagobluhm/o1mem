@@ -2,6 +2,8 @@
 
 Leia em outros idiomas: [English](../README.md)
 
+Nunca usou terminal? Comece por aqui: [Guia de instalação passo a passo](./INSTALACAO.ptbr.md)
+
 ### A cada nova sessão aberta após o `/clear`, você retoma o fio pelo índice — não re-paga a conversa arrastada
 🇧🇷 Made in Brazil
 

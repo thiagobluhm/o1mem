@@ -1,6 +1,6 @@
 {
   "name": "@tbluhm82/o1mem",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Instalador da busca semântica O(1)mem (memória contínua de projetos)",
   "bin": {
     "o1mem": "cli.js"

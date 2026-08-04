@@ -52,11 +52,18 @@ Leia também os `project_*.md` que a linha `RETOMADA` referenciar via `[[wikilin
 
 A `MEMORY.md` e os `project_*.md` são o corpus **quente**: o resumo destilado, o que sobreviveu ao cap/decay. Os handovers antigos são o corpus **frio** — o *porquê* de cada decisão, as alternativas descartadas, os becos sem saída. Isso não cabe na memória por definição, e nenhum `grep` entrega, porque a pergunta raramente usa as palavras do texto.
 
-Se o índice existir (`o1mem_rag.py stats` retorna chunks > 0), rode uma `query` com o argumento do usuário:
+Se o índice existir (`stats` retorna chunks > 0), rode uma `query` com o argumento do usuário:
 
 ```bash
-python ~/.claude/skills/rag/o1mem_rag.py --project <slug> query "<assunto>" -k 5
+npx @tbluhm82/o1mem query "<assunto>" --project <slug> -k 5
 ```
+
+> **Use o `npx`, não o caminho do script.** Quem instalou via npm não tem
+> `~/.claude/skills/rag/o1mem_rag.py` — o pacote vendoriza o script dentro dele mesmo, e
+> apontar para o caminho fixo fazia a consulta ao acervo frio falhar **em silêncio**: a
+> retomada seguia sem o frio e ninguém notava. O `npx` resolve o script nos dois tipos de
+> instalação. Só se o `npx` não existir, caia para o script local:
+> `python ~/.claude/skills/rag/o1mem_rag.py --project <slug> query "<assunto>" -k 5`.
 
 Os hits vêm marcados com o tipo. Trate-os assim:
 

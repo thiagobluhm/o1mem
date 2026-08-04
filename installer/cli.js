@@ -20,9 +20,19 @@ const { installSkills } = require('./lib/skills');
 const { version: PKG_VERSION } = require('./package.json');
 const RAG_CLI = paths.ragCliPath();
 
-// Lê comando do argv
-const cmd = process.argv[2] || 'status';
-const args = process.argv.slice(3);
+// Lê comando do argv.
+//
+// O subcomando NÃO precisa ser o primeiro token: o CLI Python trata `--project`
+// como argumento global (antes do subcomando) e é essa a sintaxe que a mensagem
+// de erro dele ensina ("escolha com --project <slug>"). Quem copiava aquela
+// dica caía em "Comando desconhecido: --project", porque aqui o comando era
+// lido cegamente de argv[2]. Procurar o subcomando na lista aceita as duas
+// ordens; o resto segue como args e cada cmd* extrai as flags que entende.
+const COMMANDS = ['install', 'status', 'index', 'query', 'config', 'uninstall', '--help', '-h'];
+const rawArgs = process.argv.slice(2);
+const cmdIdx = rawArgs.findIndex(a => COMMANDS.includes(a));
+const cmd = cmdIdx >= 0 ? rawArgs[cmdIdx] : (rawArgs[0] || 'status');
+const args = cmdIdx >= 0 ? rawArgs.filter((_, i) => i !== cmdIdx) : rawArgs.slice(1);
 
 async function cmdInstall() {
   console.log(`🚀 O(1)mem instalador v${PKG_VERSION}\n`);

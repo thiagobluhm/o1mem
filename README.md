@@ -30,6 +30,7 @@ Read this in other languages: [Português (Brasil)](./docs/README.ptbr.md)
 - `organizador-mem` — **slims down** a large context file (`CLAUDE.md`, memory) by separating what is always-relevant from what is on-demand.
 - `handover` — **stanches** the loss of context when issuing `/clear`, distilling the session into 3 cost layers + a cap that prevents memory from inflating again.
 - `retomar` — **resolves which project** to resume before reading any memory, for developers working on multiple active projects on the same machine.
+- `lembrar` — **answers a question about the past** by querying the cold archive on demand, so "do you remember X?" stops being answered with "no" while the answer sits indexed one command away.
 - `handover-nudge-hook` — **notifies the right time** to run `/handover`, measuring conversation growth turn-by-turn (with built-in value guardrails and a mute route).
 - `graph` — **traverses by structure**: turns the `[[wikilinks]]` you already write into a navigable graph (CLI + page). It does not enter the boot sequence.
 - `rag` — **traverses by meaning**: semantic search over the cold archive (`MEMORY_ARCHIVE.md`, handovers), for when nobody wrote a wikilink. Also stays out of the boot sequence.
@@ -196,6 +197,23 @@ Pass `--handovers DIR` to bring the cold archive into the corpus — without it 
 
 ---
 
+## 🧠 `lembrar` — Ask the Cold Archive, Without Leaving the Conversation
+
+**The pain.** You ask *"do you remember X?"* and get **"no."** The answer was indexed the whole time — the boot only loads the hot index (`MEMORY.md`), and nothing queries the cold archive on its own. Staying out of the boot sequence is the right design (at boot there is no question, only "resume"); the missing half was a way to make the **second movement** without dropping to a terminal.
+
+**What it does.** Takes the question, runs the semantic query, opens the source handover, and answers in prose **citing the file and date**. Not a paste of search output — if it were, it would be the CLI with extra steps.
+
+```
+/lembrar that thing about credentials
+/lembrar why we dropped the daemon --p OTHERPROJ
+```
+
+**Why it isn't `/retomar`.** That skill resumes a thread: it resolves the project (asking when ambiguous, because guessing wrong costs a whole session), loads memory, and executes the recorded resume mode. `lembrar` answers a question and stops. It defaults the project to the current directory precisely because a wrong guess here costs 5 seconds and is obvious on sight — asymmetric risk, asymmetric protocol.
+
+**The hard rule it enforces:** never answer *"I don't remember"* about the project's past **before running the query**. Absence from context is not evidence of absence from the archive.
+
+---
+
 ## 📦 npm Installation (`@tbluhm82/o1mem`)
 
 The runtime that indexes and searches is Python — but Node is the portable cross-system installation standard. A single installer detects Python, prompts for an API key (if using learning mode), installs dependencies, **copies skills (`organizador-mem`, `handover`, `retomar`) into your project's `.claude/skills/`**, indexes content, and registers the hook. All in one command — the final summary prints exact paths for installed skills.
@@ -289,6 +307,7 @@ o1mem/
 ├── handover/SKILL.md              # Claude Code (reference implementation)
 ├── organizador-mem/SKILL.md       # Claude Code
 ├── retomar/SKILL.md               # Claude Code — resolves WHICH project before resuming (multi-project)
+├── lembrar/SKILL.md               # Claude Code — answers a past question from the cold archive (on demand)
 ├── handover-nudge-hook/           # UserPromptSubmit hook (synchronous)
 │   ├── handover_nudge.py
 │   ├── handover-nudge.config.json

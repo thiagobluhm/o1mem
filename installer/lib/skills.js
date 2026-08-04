@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const BUNDLED_SKILLS_DIR = path.join(__dirname, '..', 'skills');
-const SKILL_NAMES = ['organizador-mem', 'handover', 'retomar'];
+const SKILL_NAMES = ['organizador-mem', 'handover', 'retomar', 'lembrar'];
 
 function bundledSkillNames() {
   return SKILL_NAMES.filter(name =>

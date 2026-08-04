@@ -20,11 +20,12 @@ function test(name, fn) {
   }
 }
 
-test('bundledSkillNames() acha as 3 skills empacotadas', () => {
+test('bundledSkillNames() acha as 4 skills empacotadas', () => {
   const names = bundledSkillNames();
   assert(names.includes('organizador-mem'));
   assert(names.includes('handover'));
   assert(names.includes('retomar'));
+  assert(names.includes('lembrar'));
 });
 
 test('installSkills() copia SKILL.md pra .claude/skills/<nome>/', () => {
@@ -33,7 +34,7 @@ test('installSkills() copia SKILL.md pra .claude/skills/<nome>/', () => {
 
   const results = installSkills(targetDir);
 
-  assert.strictEqual(results.length, 3);
+  assert.strictEqual(results.length, bundledSkillNames().length);
   for (const r of results) {
     assert.strictEqual(r.status, 'installed');
     assert(fs.existsSync(r.path));

@@ -32,6 +32,7 @@ Nunca usou terminal? Comece por aqui: [Guia de instalação passo a passo](./INS
 - `organizador-mem` — **enxuga** um arquivo de contexto grande (`CLAUDE.md`, memória) separando o que é sempre-relevante do que é sob-demanda.
 - `handover` — **estanca** a perda de fio ao dar `/clear`, destilando a sessão em 3 camadas de custo + um cap que impede a memória de inflar de novo.
 - `retomar` — **resolve qual projeto** retomar antes de ler qualquer memória, para quem trabalha em mais de um projeto ativo na mesma máquina.
+- `lembrar` — **responde uma pergunta sobre o passado** consultando o acervo frio sob demanda, para que "você lembra do X?" pare de ser respondido com "não" enquanto a resposta está indexada a um comando de distância.
 - `handover-nudge-hook` — **avisa a hora** de dar o `/handover`, medindo o crescimento da conversa a cada turno (com trava de valor e rota de silêncio embutidas).
 - `graph` — **atravessa por estrutura**: transforma os `[[wikilinks]]` que você já escreve em um grafo navegável (CLI + página). Não entra no boot.
 - `rag` — **atravessa por significado**: busca semântica sobre o acervo frio (`MEMORY_ARCHIVE.md`, handovers), para quando ninguém escreveu o wikilink. Também não entra no boot.
@@ -198,6 +199,23 @@ Indexação incremental por sha (reindexar sem mudança = 0 chunks re-embedados)
 
 ---
 
+## 🧠 `lembrar` — pergunte ao acervo frio sem sair da conversa
+
+**A dor.** Você pergunta *"você lembra do X?"* e ouve **"não"**. A resposta estava indexada o tempo todo — o boot carrega só o índice quente (`MEMORY.md`), e nada consulta o acervo frio sozinho. Ficar fora do boot é o desenho certo (no boot não existe pergunta, existe "retomar"); o que faltava era um jeito de fazer o **segundo movimento** sem descer pro terminal.
+
+**O que ela faz.** Pega a pergunta, roda a busca semântica, abre o handover de origem e responde em prosa **citando arquivo e data**. Não é a saída da busca colada — se fosse, seria o comando do terminal com passos a mais.
+
+```
+/lembrar aquilo de credenciais
+/lembrar por que largamos o daemon --p OUTROPROJ
+```
+
+**Por que não é o `/retomar`.** Aquela skill retoma um fio: resolve o projeto (perguntando quando há ambiguidade, porque errar custa uma sessão inteira), carrega a memória e executa o modo de retomada gravado. A `lembrar` responde uma pergunta e para. Ela assume o projeto do diretório atual justamente porque errar aqui custa 5 segundos e é óbvio na hora — risco assimétrico, protocolo assimétrico.
+
+**A regra dura que ela impõe:** nunca responder *"não lembro"* sobre o passado do projeto **antes de rodar a query**. Ausência no contexto não é evidência de ausência no acervo.
+
+---
+
 ## 📦 Instalação via npm (`@tbluhm82/o1mem`)
 
 O runtime que indexa e busca é Python — mas Node é o padrão portável de instalação entre sistemas. Um instalador único detecta Python, pede chave (se você quiser o modo aprendizado), instala dependências, **copia as skills (`organizador-mem`, `handover`, `retomar`) para o `.claude/skills/` do seu projeto**, indexa e registra o hook. Tudo num comando — o resumo final mostra o caminho exato de cada skill instalada.
@@ -301,6 +319,7 @@ o1mem/
 ├── handover/SKILL.md              # Claude Code (implementação de referência)
 ├── organizador-mem/SKILL.md       # Claude Code
 ├── retomar/SKILL.md               # Claude Code — resolve QUAL projeto antes de retomar (multi-projeto)
+├── lembrar/SKILL.md               # Claude Code — responde pergunta do passado pelo acervo frio (sob demanda)
 ├── handover-nudge-hook/           # hook UserPromptSubmit (síncrono)
 │   ├── handover_nudge.py
 │   ├── handover-nudge.config.json

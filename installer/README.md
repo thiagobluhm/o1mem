@@ -18,7 +18,7 @@ npx @tbluhm82/o1mem install
   ✓ Se aprendizado: pede chave (Anthropic | OpenAI), valida formato, grava em ~/.claude/o1mem/.env
   ✓ pip install chromadb + sentence-transformers (~470 MB)
   ✓ Pergunta em qual pasta de projeto instalar as skills, copia
-    organizador-mem/handover/retomar para <pasta>/.claude/skills/
+    organizador-mem/handover/retomar/lembrar para <pasta>/.claude/skills/
   ✓ Indexa cada projeto: "N chunks embedados"
   ✓ Registra hook no ~/.claude/settings.json (merge defensivo)
   ✓ Resumo: mostra o caminho exato de cada skill instalada
@@ -88,11 +88,12 @@ installer/
     pip.js         # instala chromadb + sentence-transformers
     hooks.js       # merge defensivo em settings.json
     index.js       # dispara primeira indexação
-    skills.js      # copia organizador-mem/handover/retomar para .claude/skills/
+    skills.js      # copia organizador-mem/handover/retomar/lembrar para .claude/skills/
   skills/          # cópias empacotadas das SKILL.md (fonte: ../<nome>/SKILL.md)
     organizador-mem/SKILL.md
     handover/SKILL.md
     retomar/SKILL.md
+    lembrar/SKILL.md
   test/
     hooks.test.js   # fixture: merge preserva hooks pré-existentes
     env.test.js     # fixture: chave nunca aparece em log

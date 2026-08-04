@@ -150,11 +150,11 @@ async function cmdInstall() {
     process.exit(1);
   }
 
-  // 5b. Copia as skills (organizador-mem, handover, retomar) para o projeto
+  // 5b. Copia as skills (organizador-mem, handover, retomar, lembrar) para o projeto
   let skillResults = [];
   try {
     const targetDir = await prompt.ask(
-      '\nEm qual pasta de projeto instalar as skills (organizador-mem, handover, retomar)?',
+      '\nEm qual pasta de projeto instalar as skills (organizador-mem, handover, retomar, lembrar)?',
       process.cwd()
     );
     skillResults = installSkills(targetDir);

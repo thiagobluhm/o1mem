@@ -46,10 +46,6 @@ function createDesktopShortcut(opts = {}) {
   }
 
   const lnk = path.join(desktop, 'O(1)mem.lnk');
-  // -NoExit deixaria a janela aberta depois do REPL; queremos que fechar o
-  // terminal seja o mesmo gesto de fechar o app.
-  const inner = "$host.UI.RawUI.WindowTitle='O(1)mem'; o1mem repl" +
-    (opts.project ? ` ${opts.project}` : '');
   const psExe = path.join(
     process.env.SystemRoot || 'C:\\Windows',
     'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
@@ -57,11 +53,15 @@ function createDesktopShortcut(opts = {}) {
 
   // Windows Terminal quando houver: fonte, cores de 24 bits e título próprio —
   // é a diferença entre "um prompt aberto" e "um app". Senão, powershell puro.
+  //
+  // ⚠️ `;` é separador de comandos DO wt, não do shell: qualquer ponto-e-vírgula
+  // aqui faz ele picar a linha e tentar lançar o resto como outro programa
+  // ("[error 0x80070002] when launching ..."). Por isso o título sai por
+  // --title (não por $host.UI.RawUI.WindowTitle) e o -Command vai sem aspas,
+  // com os tokens soltos — o PowerShell junta os argumentos sozinho.
   const wt = findWindowsTerminal();
   const target = wt || psExe;
-  const argline = wt
-    ? `-w new --title "O(1)mem" "${psExe}" -NoLogo -NoProfile -Command "${inner}"`
-    : `-NoLogo -NoProfile -Command "${inner}"`;
+  const argline = buildArgs({ wt: !!wt, psExe, project: opts.project });
 
   const ps = `
 $s = (New-Object -ComObject WScript.Shell).CreateShortcut(${quote(lnk)})
@@ -81,6 +81,17 @@ $s.Save()
 }
 
 /**
+ * Monta a linha de argumentos do atalho. Separada para ser testável: foi aqui
+ * que o duplo clique quebrou, e o defeito era invisível fora do Windows real.
+ */
+function buildArgs({ wt, psExe, project }) {
+  const slug = project ? ` ${project}` : '';
+  return wt
+    ? `-w new --title "O(1)mem" "${psExe}" -NoLogo -NoProfile -Command o1mem repl${slug}`
+    : `-NoLogo -NoProfile -Command "$host.UI.RawUI.WindowTitle='O(1)mem'; o1mem repl${slug}"`;
+}
+
+/**
  * Acha o wt.exe. Via `where`, não `fs.existsSync`: o Windows Terminal é
  * distribuído como App Execution Alias, um reparse point que responde EACCES ao
  * stat — existsSync devolve false para um executável que existe e roda.
@@ -97,4 +108,4 @@ function quote(s) {
   return "'" + String(s).replace(/'/g, "''") + "'";
 }
 
-module.exports = { createDesktopShortcut, isWindows, findWindowsTerminal };
+module.exports = { createDesktopShortcut, isWindows, findWindowsTerminal, buildArgs };

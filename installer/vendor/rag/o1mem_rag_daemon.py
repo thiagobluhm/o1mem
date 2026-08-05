@@ -157,7 +157,12 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 pass
 
     def _health(self):
-        """GET /health -> {"status":"ok","model":"...","uptime_s":...}"""
+        """GET /health -> {"status":"ok","model":"...","uptime_s":...,"project":...,"root":...}
+
+        `project`/`root` existem porque o daemon serve UM projeto, fixado no
+        startup: quem chama precisa saber qual, para reusar o daemon vivo ou
+        reiniciá-lo apontando para outro (ver o REPL em installer/lib/repl.js).
+        """
         uptime = time.time() - _state["started_at"]
         resp = {
             "status": "ok",
@@ -165,6 +170,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             if _state["embedder_cache"]
             else "unknown",
             "uptime_s": round(uptime, 1),
+            "project": _state["slug"],
+            "root": _state["root"],
         }
         self._json_response(resp, 200)
 

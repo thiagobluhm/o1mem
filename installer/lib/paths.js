@@ -48,6 +48,10 @@ function ragCliPath() {
   return path.resolve(path.join(__dirname, '..', 'vendor', 'rag', 'o1mem_rag.py'));
 }
 
+function daemonCliPath() {
+  return path.resolve(path.join(__dirname, '..', 'vendor', 'rag', 'o1mem_rag_daemon.py'));
+}
+
 function handoverNudgeScriptPath() {
   return path.resolve(path.join(__dirname, '..', 'vendor', 'hook', 'handover_nudge.py'));
 }
@@ -133,6 +137,7 @@ module.exports = {
   daemonJsonPath,
   chromaDir,
   ragCliPath,
+  daemonCliPath,
   handoverNudgeScriptPath,
   readConfig,
   readEnv,

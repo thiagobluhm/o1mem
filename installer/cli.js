@@ -28,7 +28,7 @@ const RAG_CLI = paths.ragCliPath();
 // dica caía em "Comando desconhecido: --project", porque aqui o comando era
 // lido cegamente de argv[2]. Procurar o subcomando na lista aceita as duas
 // ordens; o resto segue como args e cada cmd* extrai as flags que entende.
-const COMMANDS = ['install', 'status', 'index', 'query', 'config', 'uninstall', '--help', '-h'];
+const COMMANDS = ['install', 'status', 'index', 'query', 'repl', 'config', 'uninstall', '--help', '-h'];
 const rawArgs = process.argv.slice(2);
 const cmdIdx = rawArgs.findIndex(a => COMMANDS.includes(a));
 const cmd = cmdIdx >= 0 ? rawArgs[cmdIdx] : (rawArgs[0] || 'status');
@@ -446,6 +446,9 @@ async function cmdUninstall() {
       case 'query':
         cmdQuery();
         break;
+      case 'repl':
+        await require('./lib/repl').runRepl(args);
+        break;
       case 'config':
         await cmdConfig();
         break;
@@ -462,6 +465,7 @@ Subcomandos:
   status      Mostra status: python, mode, índices, daemon
   index       Indexa projeto(s) [--project SLUG] [--full]
   query       Busca [--distill] "texto" [-k NUM]
+  repl        Terminal de consulta [--project SLUG] (daemon: modelo carrega 1x)
   config      Reconfigura mode/chave
   uninstall   Remove hook, opcionalmente apaga dados
 

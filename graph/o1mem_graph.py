@@ -171,6 +171,9 @@ def resolve_root(project: str = None, root: str = None) -> tuple:
     if not roots:
         raise SystemExit(f"ERRO: nenhuma pasta memory/ sob {PROJECTS_DIR}")
     if project:
+        exact = [r for r in roots if r[0].lower() == project.lower()]
+        if exact:
+            return exact[0]
         hits = [r for r in roots if project.lower() in r[0].lower()]
         if not hits:
             disp = "\n".join("  " + s for s, _ in roots)

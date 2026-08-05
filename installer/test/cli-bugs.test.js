@@ -132,3 +132,53 @@ test('Bug 2: Erro sobre pip é reportado como pip, não Python', () => {
     `Esperava menção a pip, got: ${reported}`
   );
 });
+
+// ============ BUG 3: require('prompt') sequestrava process.stdin ============
+// A interface readline era criada no escopo do módulo, então bastava o cli.js
+// dar require para TODO comando perder o stdin — o `repl` criava a própria
+// interface e não recebia linha nenhuma.
+test('Bug 3: require(prompt) não consome stdin', () => {
+  const before = process.stdin.listenerCount('data');
+  require('../lib/prompt');
+  assert.strictEqual(
+    process.stdin.listenerCount('data'),
+    before,
+    'prompt.js criou a interface readline no require e sequestrou o stdin'
+  );
+});
+
+// ============ REPL ============
+test('REPL: slug exato ganha de substring, e substring ainda casa', () => {
+  const { slugMatches } = require('../lib/repl');
+  assert(slugMatches('c--Projetos-O1MEM', 'c--Projetos-O1MEM'), 'exato deve casar');
+  assert(slugMatches('c--Projetos-cge2026-CGE', 'cge2026'), 'substring deve casar');
+  assert(!slugMatches('c--Projetos-O1MEM', 'aistein'), 'slug alheio não pode casar');
+  assert(slugMatches('c--Projetos-O1MEM', null), 'sem projeto pedido, qualquer um serve');
+});
+
+test('REPL: handover resolve na pasta irmã de memory/', () => {
+  const { resolveHitPath } = require('../lib/repl');
+  const os = require('os');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'o1mem-repl-'));
+  const root = path.join(base, 'memory');
+  const handovers = path.join(base, 'handovers');
+  fs.mkdirSync(root);
+  fs.mkdirSync(handovers);
+  fs.writeFileSync(path.join(root, 'project_x.md'), 'x');
+  fs.writeFileSync(path.join(handovers, 'HANDOVER_x.md'), 'x');
+
+  assert.strictEqual(
+    resolveHitPath(root, { kind: 'handover', source: 'HANDOVER_x.md' }),
+    path.normalize(path.join(handovers, 'HANDOVER_x.md'))
+  );
+  assert.strictEqual(
+    resolveHitPath(root, { kind: 'project', source: 'project_x.md' }),
+    path.normalize(path.join(root, 'project_x.md'))
+  );
+  assert.strictEqual(
+    resolveHitPath(root, { kind: 'project', source: 'nao_existe.md' }),
+    null,
+    'arquivo ausente deve devolver null, não um caminho inventado'
+  );
+  fs.rmSync(base, { recursive: true, force: true });
+});

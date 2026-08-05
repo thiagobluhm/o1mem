@@ -71,6 +71,38 @@ function sleep(ms) {
 }
 
 /**
+ * Descobre o projeto pelo diretório atual: o slug do índice é o caminho com
+ * `:` e separadores virando `-`. Sobe pelos pais porque quase nunca se está na
+ * raiz — `c:\Projetos\O1MEM\skills\installer` pertence ao projeto de `skills`.
+ * Confere contra as pastas que existem de fato; nunca devolve slug deduzido no ar.
+ */
+function detectProject(cwd) {
+  const known = new Set(paths.listProjects());
+  let dir = path.resolve(cwd || process.cwd());
+  for (;;) {
+    const slug = dir.replace(/[\\/:]/g, '-');
+    if (known.has(slug)) return slug;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/** Sem projeto resolvido, listar e deixar escolher — nunca chutar em qual acervo
+ *  a pergunta cai. */
+function chooseProject(slugs) {
+  return new Promise(resolve => {
+    console.log('\nNão descobri o projeto por este diretório. Escolha:\n');
+    slugs.forEach((s, i) => console.log(`  ${i + 1}. ${s}`));
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question('\nNúmero: ', a => {
+      rl.close();
+      resolve(slugs[parseInt(a.trim(), 10) - 1] || null);
+    });
+  });
+}
+
+/**
  * Garante um daemon vivo servindo `project`. Reusa o que já está de pé quando o
  * projeto bate; senão derruba e sobe outro (o daemon serve UM projeto, fixado no
  * startup — trocar de projeto custa a carga do modelo de novo).
@@ -160,10 +192,43 @@ async function runRepl(argv) {
     else if (!argv[i].startsWith('-') && !project) project = argv[i];
   }
 
+  if (!project) {
+    project = detectProject(process.cwd());
+    if (project) console.log(`📂 Projeto deste diretório: ${project}`);
+    else {
+      const slugs = paths.listProjects();
+      if (!slugs.length) throw new Error('nenhum projeto com memory/ em ~/.claude/projects');
+      project = slugs.length === 1 ? slugs[0] : await chooseProject(slugs);
+      if (!project) throw new Error('nenhum projeto escolhido');
+    }
+  }
+
   let { port, health: h } = await ensureDaemon(project);
   let k = 5;
   let lastHits = [];
   let root = h.root;
+
+  // Com TTY, a tela navegável; em pipe/CI, o fluxo linha-a-linha abaixo — que é
+  // o que os testes exercitam e o que sobra quando o terminal não coopera.
+  if (process.stdin.isTTY && !argv.includes('--plain')) {
+    return require('./tui').start({
+      project: () => h.project,
+      projects: () => paths.listProjects(),
+      query: async (text, n) => {
+        const r = await get(
+          port,
+          `/query?project=${encodeURIComponent(h.project)}&text=${encodeURIComponent(text)}&k=${n}`
+        );
+        if (r.status !== 200) throw new Error(r.json.error || `HTTP ${r.status}`);
+        return r.json;
+      },
+      open: hit => resolveHitPath(root, hit),
+      setProject: async slug => {
+        ({ port, health: h } = await ensureDaemon(slug));
+        root = h.root;
+      }
+    });
+  }
 
   console.log(`\n✅ Daemon vivo (porta ${port}) — projeto ${h.project}`);
   console.log('   :projeto <slug>  :abrir <N>  :k <N>  :sair\n');
@@ -231,4 +296,4 @@ async function runRepl(argv) {
   }));
 }
 
-module.exports = { runRepl, ensureDaemon, slugMatches, resolveHitPath };
+module.exports = { runRepl, ensureDaemon, slugMatches, resolveHitPath, detectProject };

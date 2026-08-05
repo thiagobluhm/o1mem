@@ -28,7 +28,7 @@ const RAG_CLI = paths.ragCliPath();
 // dica caía em "Comando desconhecido: --project", porque aqui o comando era
 // lido cegamente de argv[2]. Procurar o subcomando na lista aceita as duas
 // ordens; o resto segue como args e cada cmd* extrai as flags que entende.
-const COMMANDS = ['install', 'status', 'index', 'query', 'repl', 'config', 'uninstall', '--help', '-h'];
+const COMMANDS = ['install', 'status', 'index', 'query', 'repl', 'atalho', 'config', 'uninstall', '--help', '-h'];
 const rawArgs = process.argv.slice(2);
 const cmdIdx = rawArgs.findIndex(a => COMMANDS.includes(a));
 const cmd = cmdIdx >= 0 ? rawArgs[cmdIdx] : (rawArgs[0] || 'status');
@@ -62,6 +62,28 @@ async function cmdInstall() {
     console.log(`Selecionado(s): ${projectsToIndex.join(', ')}\n`);
   } catch (e) {
     console.error('Erro ao selecionar projetos:', e.message);
+    process.exit(1);
+  }
+
+  // 2b. Escolhe por onde vai usar. As três interfaces leem o MESMO acervo — a
+  // escolha é só sobre o que instalar, e dá para voltar depois (`o1mem atalho`,
+  // reinstalar as skills). Sem isto o instalador entregava as skills a quem
+  // talvez nunca abrisse o Claude Code, e não oferecia o terminal a ninguém.
+  let interfaces;
+  try {
+    console.log('\nPor onde você quer usar o O(1)mem?');
+    // Só as duas que este pacote entrega. O painel/grafo existe no repo, mas
+    // ficou de fora do npm por decisão consciente — oferecê-lo aqui seria
+    // prometer o que a instalação não instala.
+    const opts = [
+      'Claude Code — skills handover/retomar/lembrar dentro do assistente',
+      'Terminal O(1)mem — janela própria de busca + atalho na área de trabalho'
+    ];
+    const chosen = await prompt.multiSelect(opts, true);
+    interfaces = { claudeCode: chosen.includes(0), terminal: chosen.includes(1) };
+    console.log('');
+  } catch (e) {
+    console.error('Erro ao escolher interfaces:', e.message);
     process.exit(1);
   }
 
@@ -162,7 +184,7 @@ async function cmdInstall() {
 
   // 5b. Copia as skills (organizador-mem, handover, retomar, lembrar) para o projeto
   let skillResults = [];
-  try {
+  if (interfaces.claudeCode) try {
     const targetDir = await prompt.ask(
       '\nEm qual pasta de projeto instalar as skills (organizador-mem, handover, retomar, lembrar)?',
       process.cwd()
@@ -196,6 +218,20 @@ async function cmdInstall() {
     process.exit(1);
   }
 
+  // 6b. Atalho do terminal
+  if (interfaces.terminal) {
+    const { createDesktopShortcut, isWindows } = require('./lib/shortcut');
+    if (!isWindows()) {
+      console.log(`\nℹ️  Terminal instalado — rode \`o1mem repl\`. (Atalho de área de trabalho: só Windows por enquanto.)`);
+    } else {
+      const agree = await prompt.confirm('\nCriar o atalho "O(1)mem" na área de trabalho?', true);
+      if (agree) {
+        const r = createDesktopShortcut({ project: projectsToIndex[0] });
+        console.log(r.created ? `✅ Atalho criado: ${r.path}` : `⚠️  ${r.reason} (rode \`o1mem atalho\` depois)`);
+      }
+    }
+  }
+
   // 7. Registra hook
   try {
     const agree = await prompt.confirm(
@@ -226,6 +262,10 @@ async function cmdInstall() {
     for (const r of skillResults) {
       console.log(`  • ${r.name}: ${r.path}`);
     }
+  }
+  if (interfaces.terminal) {
+    console.log('\nTerminal: `o1mem repl` (ou o atalho "O(1)mem"). Ele descobre o projeto');
+    console.log('pelo diretório atual; ↑↓ navega, ↵ abre, / busca de novo, q sai.');
   }
   console.log('\nRode para ver o status:\n  npx o1mem status\n');
 
@@ -449,6 +489,11 @@ async function cmdUninstall() {
       case 'repl':
         await require('./lib/repl').runRepl(args);
         break;
+      case 'atalho': {
+        const r = require('./lib/shortcut').createDesktopShortcut({ project: args[0] });
+        console.log(r.created ? `✅ Atalho criado: ${r.path}` : `⚠️  ${r.reason}`);
+        break;
+      }
       case 'config':
         await cmdConfig();
         break;
@@ -466,6 +511,7 @@ Subcomandos:
   index       Indexa projeto(s) [--project SLUG] [--full]
   query       Busca [--distill] "texto" [-k NUM]
   repl        Terminal de consulta [--project SLUG] (daemon: modelo carrega 1x)
+  atalho      Cria o atalho do terminal na area de trabalho (Windows)
   config      Reconfigura mode/chave
   uninstall   Remove hook, opcionalmente apaga dados
 

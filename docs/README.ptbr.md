@@ -225,7 +225,14 @@ npm install -g @tbluhm82/o1mem
 o1mem install     # detecta Python/pip, escolhe modo, copia skills, indexa, registra o hook
 o1mem status      # Python ok? Modo? Índices? Daemon?
 o1mem query "sua pergunta" --project <slug-do-projeto>
+o1mem repl        # terminal de busca no acervo — descobre o projeto pelo diretório atual
+o1mem atalho      # cria o atalho do terminal na área de trabalho (Windows)
 ```
+
+O `repl` conversa com o daemon, então o modelo de embeddings carrega **uma vez**: a
+primeira pergunta paga ~45s de subida, cada uma depois custa ~60ms. Setas navegam,
+`↵` abre o arquivo de origem, `/` busca de novo, `q` sai. A tela é ANSI puro — sem
+`ink`, sem `blessed`, sem dependência nova na instalação global.
 
 | Modo | O que faz | Custo |
 |---|---|---|

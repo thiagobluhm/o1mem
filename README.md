@@ -223,7 +223,14 @@ npm install -g @tbluhm82/o1mem
 o1mem install     # detects Python/pip, selects mode, copies skills, indexes, registers hook
 o1mem status      # Python status? Mode? Indices? Daemon?
 o1mem query "your question" --project <project-slug>
+o1mem repl        # terminal UI over the archive — figures out the project from your cwd
+o1mem atalho      # desktop shortcut for the terminal (Windows)
 ```
+
+The `repl` talks to the daemon, so the embedding model loads **once**: the first
+question pays ~45s of startup, every one after it costs ~60ms. Arrow keys navigate,
+`↵` opens the source file, `/` searches again, `q` quits. It is drawn in plain ANSI —
+no `ink`, no `blessed`, no new dependency in your global install.
 
 | Mode | What it does | Cost |
 | --- | --- | --- |

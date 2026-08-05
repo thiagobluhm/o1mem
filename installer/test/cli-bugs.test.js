@@ -151,7 +151,7 @@ test('Bug 3: require(prompt) não consome stdin', () => {
 test('REPL: slug exato ganha de substring, e substring ainda casa', () => {
   const { slugMatches } = require('../lib/repl');
   assert(slugMatches('c--Projetos-O1MEM', 'c--Projetos-O1MEM'), 'exato deve casar');
-  assert(slugMatches('c--Projetos-cge2026-CGE', 'cge2026'), 'substring deve casar');
+  assert(slugMatches('c--Projetos-meuprojeto-APP', 'meuprojeto'), 'substring deve casar');
   assert(!slugMatches('c--Projetos-O1MEM', 'aistein'), 'slug alheio não pode casar');
   assert(slugMatches('c--Projetos-O1MEM', null), 'sem projeto pedido, qualquer um serve');
 });

@@ -271,7 +271,7 @@ function listHandovers(root) {
 
 async function runRepl(argv) {
   // Aceita `repl --project <slug>` e `repl <slug>`: o alias `mem` do shell só
-  // repassa argumentos, e digitar `mem cge2026` é o que a mão faz sozinha.
+  // repassa argumentos, e digitar `mem meuprojeto` é o que a mão faz sozinha.
   let project = null;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--project' && i + 1 < argv.length) project = argv[++i];

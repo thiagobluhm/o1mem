@@ -137,6 +137,59 @@ test('seta para baixo move a seleção de um em um e Enter abre o selecionado', 
   }
 });
 
+// ===== regressões visuais relatadas em uso real =====
+
+test('nunca emite \\x1b[2J — apagar a tela antes de pintar é o que fazia piscar', async () => {
+  const h = harness(HITS);
+  try {
+    h.key('a', { name: 'a' });
+    h.key(null, { name: 'return' });
+    await new Promise(r => setImmediate(r));
+    await new Promise(r => setImmediate(r));
+    h.key(null, { name: 'down' });
+    assert(!h.screen().includes('\x1b[2J'), 'voltou a limpar a tela inteira a cada frame');
+  } finally {
+    h.restore();
+  }
+});
+
+test('o frame tem exatamente `rows` linhas e não termina em quebra — senão rola', () => {
+  const h = harness(HITS);
+  try {
+    const frames = h.screen().split('\x1b[40m\x1b[H');
+    const last = frames[frames.length - 1];
+    assert.strictEqual(last.split('\r\n').length, 24, 'frame não bate com a altura da janela');
+    assert(!last.endsWith('\r\n'), 'quebra na última linha empurra a tela para cima');
+  } finally {
+    h.restore();
+  }
+});
+
+test('pinta fundo em toda linha — sem isso a transparência do terminal vaza', () => {
+  const h = harness(HITS);
+  try {
+    const frames = h.screen().split('\x1b[40m\x1b[H');
+    const last = frames[frames.length - 1];
+    for (const line of last.split('\r\n')) {
+      assert(line.includes('\x1b[K'), `linha sem \\x1b[K não limpa o resto: ${JSON.stringify(line)}`);
+    }
+  } finally {
+    h.restore();
+  }
+});
+
+test('usa a tela alternativa e a devolve ao sair', async () => {
+  const h = harness(HITS);
+  try {
+    assert(h.screen().includes('\x1b[?1049h'), 'não entrou na tela alternativa');
+    h.key('q', { name: 'q' });
+    await h.done;
+    assert(h.screen().includes('\x1b[?1049l'), 'saiu sem devolver a tela do shell');
+  } finally {
+    h.restore();
+  }
+});
+
 test('q na lista encerra e restaura o cursor', async () => {
   const h = harness(HITS);
   try {

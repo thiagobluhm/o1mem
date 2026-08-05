@@ -6,53 +6,65 @@
  * zero-dependências no `npm i -g`, e ~40 pacotes transitivos por causa de uma
  * lista navegável seria um preço alto pago pelo usuário final.
  *
+ * ANTI-FLICKER (custou uma versão que piscava a cada tecla): a primeira versão
+ * fazia `\x1b[2J` e redesenhava com dezenas de writes — o terminal chegava a
+ * apresentar a tela vazia entre o apagar e o pintar. Agora cada frame é montado
+ * como UMA string e escrito de uma vez, sem apagar nada: o cursor volta para o
+ * topo e cada linha termina em `\x1b[K`, que limpa só o resto daquela linha.
+ * Nada de `2J` no caminho do render.
+ *
  * Só entra em cena quando há TTY. Em pipe/CI o `repl` cai no fluxo linha-a-linha.
  */
 const fs = require('fs');
 const readline = require('readline');
 
-const C = {
-  reset: '\x1b[0m',
-  dim: '\x1b[2m',
-  bold: '\x1b[1m',
-  rev: '\x1b[7m',
-  cyan: '\x1b[36m',
-  yellow: '\x1b[33m',
-  green: '\x1b[32m',
-  magenta: '\x1b[35m',
-  gray: '\x1b[90m'
-};
+// Paleta "verde fósforo": monocromática sobre preto, como terminal antigo.
+// Sendo mono, o tipo do hit não pode virar cor — vira prefixo textual.
+const BG = '\x1b[40m';
+const R = '\x1b[0m' + BG; // reset que preserva o fundo preto
+const BRIGHT = '\x1b[92m';
+const GREEN = '\x1b[32m';
+const DIM = '\x1b[2;32m';
+const SEL = '\x1b[30;102m'; // preto sobre verde brilhante
+const BAR = '\x1b[30;42m'; // barra de topo/rodapé
 
-// Cor por tipo de hit: o acervo frio (handover) é o que a memória quente não tem,
-// então merece destaque próprio na varredura visual.
-const KIND_COLOR = {
-  handover: C.yellow,
-  project: C.cyan,
-  feedback: C.magenta,
-  user: C.green,
-  reference: C.green
+const KIND_TAG = {
+  handover: 'HAND',
+  project: 'proj',
+  feedback: 'feed',
+  user: 'user',
+  reference: 'ref ',
+  archive_bullet: 'arch'
 };
 
 const out = s => process.stdout.write(s);
-const clear = () => out('\x1b[2J\x1b[H');
 const hideCursor = () => out('\x1b[?25l');
 const showCursor = () => out('\x1b[?25h');
-const moveTo = (row, col) => out(`\x1b[${row};${col}H`);
+// Tela alternativa: ao sair, o terminal devolve o conteúdo que estava antes,
+// em vez de deixar o rastro do app no histórico do shell.
+const enterAlt = () => out('\x1b[?1049h');
+const leaveAlt = () => out('\x1b[?1049l');
 
 function size() {
   return { cols: process.stdout.columns || 80, rows: process.stdout.rows || 24 };
 }
 
-/** Corta respeitando a largura da coluna (sem quebrar a moldura). */
+/** Texto puro cortado/preenchido em `width` — o cálculo de largura é feito aqui,
+ *  antes de qualquer código de cor entrar na string. */
+function cell(s, width) {
+  const clean = String(s == null ? '' : s).replace(/\s+/g, ' ');
+  if (clean.length > width) return clean.slice(0, Math.max(0, width - 1)) + '…';
+  return clean.padEnd(width);
+}
+
 function fit(s, width) {
-  const clean = (s || '').replace(/\s+/g, ' ');
-  return clean.length > width ? clean.slice(0, width - 1) + '…' : clean.padEnd(width);
+  return cell(s, width);
 }
 
 /** Quebra texto em linhas de no máximo `width`, preservando parágrafos. */
 function wrap(text, width) {
   const lines = [];
-  for (const para of (text || '').split('\n')) {
+  for (const para of String(text == null ? '' : text).split('\n')) {
     if (!para.trim()) {
       lines.push('');
       continue;
@@ -82,86 +94,77 @@ function start(io) {
     sel: 0,
     viewLines: [],
     viewTop: 0,
+    viewTitle: '',
     status: 'Digite a pergunta e tecle Enter.',
     busy: false
   };
 
-  function header() {
-    const { cols } = size();
+  function headerLine(cols) {
     const title = ' O(1)mem ';
-    const proj = ` ${io.project()} `;
-    const fill = Math.max(0, cols - title.length - proj.length - 2);
-    moveTo(1, 1);
-    out(C.rev + C.bold + title + C.reset + C.rev + ' '.repeat(fill) + proj + C.reset);
+    const proj = ' ' + io.project() + ' ';
+    const fill = Math.max(0, cols - title.length - proj.length);
+    return BAR + title + ' '.repeat(fill) + proj + R;
   }
 
-  function footer() {
-    const { cols, rows } = size();
+  function footerLines(cols) {
     const help =
       state.mode === 'view'
         ? ' ↑↓ rola · esc volta · q sai '
         : state.mode === 'list'
-          ? ' ↑↓ navega · ↵ abre · / nova busca · p projeto · q sai '
+          ? ' ↑↓ navega · ↵ abre · / busca · p projeto · q sai '
           : ' ↵ busca · esc cancela · q sai (campo vazio) ';
-    moveTo(rows - 1, 1);
-    out(C.dim + fit(state.status, cols) + C.reset);
-    moveTo(rows, 1);
-    out(C.rev + fit(help, cols) + C.reset);
+    return [DIM + cell(state.status, cols) + R, BAR + cell(help, cols) + R];
   }
 
-  function renderInput() {
-    const { cols } = size();
-    moveTo(3, 1);
-    out(C.bold + '> ' + C.reset + fit(state.text + (state.mode === 'input' ? '▏' : ''), cols - 3));
-  }
+  /** Corpo da tela: campo de busca + lista à esquerda e preview à direita. */
+  function bodyLines(cols, height) {
+    const listW = Math.max(26, Math.floor(cols * 0.42));
+    const prevW = Math.max(10, cols - listW - 3);
+    const lines = [];
 
-  function renderList() {
-    const { cols, rows } = size();
-    const listW = Math.max(24, Math.floor(cols * 0.38));
-    const prevW = cols - listW - 3;
-    const top = 5;
-    const height = rows - top - 2;
+    lines.push('');
+    lines.push(BRIGHT + ' > ' + R + GREEN + cell(state.text + (state.mode === 'input' ? '▏' : ''), cols - 3) + R);
+    lines.push('');
 
-    for (let i = 0; i < height; i++) {
+    const sel = state.hits[state.sel];
+    const preview = sel ? wrap(sel.excerpt, prevW) : [];
+    const rows = height - 3;
+
+    for (let i = 0; i < rows; i++) {
       const hit = state.hits[i];
-      moveTo(top + i, 1);
+      let left;
       if (!hit) {
-        out(' '.repeat(listW) + C.gray + ' │ ' + C.reset + ' '.repeat(Math.max(0, prevW)));
-        continue;
+        left = R + ' '.repeat(listW);
+      } else {
+        const tag = KIND_TAG[hit.kind] || '....';
+        const label = ` ${hit.score.toFixed(2)} [${tag}] ${hit.source}`;
+        left = i === state.sel ? SEL + cell(label, listW) + R : GREEN + cell(label, listW) + R;
       }
-      const kc = KIND_COLOR[hit.kind] || C.reset;
-      const label = `${hit.score.toFixed(2)} ${hit.source}`;
-      const line = fit(label, listW);
-      out(i === state.sel ? C.rev + line + C.reset : kc + line + C.reset);
-
-      out(C.gray + ' │ ' + C.reset);
-      const sel = state.hits[state.sel];
-      const preview = sel ? wrap(sel.excerpt, prevW) : [];
-      out(fit(preview[i] || '', prevW));
+      lines.push(left + DIM + ' │ ' + R + GREEN + cell(preview[i] || '', prevW) + R);
     }
+    return lines;
   }
 
-  function renderView() {
-    const { cols, rows } = size();
-    const height = rows - 5;
-    for (let i = 0; i < height; i++) {
-      moveTo(4 + i, 1);
-      out(fit(state.viewLines[state.viewTop + i] || '', cols));
+  function viewBody(cols, height) {
+    const lines = [BRIGHT + cell(state.viewTitle, cols) + R, ''];
+    for (let i = 0; i < height - 2; i++) {
+      lines.push(GREEN + cell(state.viewLines[state.viewTop + i] || '', cols) + R);
     }
+    return lines;
   }
 
+  /** Um único write por frame — é isto que mata o piscar. */
   function render() {
-    clear();
-    header();
-    if (state.mode === 'view') {
-      moveTo(3, 1);
-      out(C.bold + fit(state.viewTitle || '', size().cols) + C.reset);
-      renderView();
-    } else {
-      renderInput();
-      renderList();
+    const { cols, rows } = size();
+    const body = state.mode === 'view' ? viewBody(cols, rows - 3) : bodyLines(cols, rows - 3);
+    const all = [headerLine(cols), ...body, ...footerLines(cols)];
+
+    let frame = BG + '\x1b[H';
+    for (let i = 0; i < rows; i++) {
+      frame += (all[i] === undefined ? '' : all[i]) + '\x1b[K';
+      if (i < rows - 1) frame += '\r\n';
     }
-    footer();
+    out(frame);
   }
 
   async function runQuery() {
@@ -170,7 +173,7 @@ function start(io) {
     state.status = 'buscando…';
     render();
     try {
-      const r = await io.query(state.text.trim(), 12);
+      const r = await io.query(state.text.trim(), 20);
       state.hits = r.hits || [];
       state.sel = 0;
       state.mode = state.hits.length ? 'list' : 'input';
@@ -193,14 +196,15 @@ function start(io) {
       state.status = `arquivo não encontrado: ${hit.source}`;
       return;
     }
-    state.viewLines = wrap(fs.readFileSync(p, 'utf8'), size().cols - 1);
+    state.viewLines = wrap(fs.readFileSync(p, 'utf8'), size().cols - 2);
     state.viewTop = 0;
-    state.viewTitle = p;
+    state.viewTitle = ' ' + p;
     state.mode = 'view';
   }
 
   async function onKey(str, key) {
     if (state.busy) return;
+    key = key || {};
     const { rows } = size();
 
     if (key.ctrl && key.name === 'c') return quit();
@@ -263,23 +267,26 @@ function start(io) {
   const finished = new Promise(r => (done = r));
 
   function quit() {
-    process.stdin.setRawMode(false);
+    if (process.stdin.setRawMode) process.stdin.setRawMode(false);
     process.stdin.pause();
     process.stdin.removeListener('keypress', onKey);
+    process.stdout.removeListener('resize', render);
+    out('\x1b[0m');
+    leaveAlt();
     showCursor();
-    clear();
     done();
   }
 
   readline.emitKeypressEvents(process.stdin);
-  process.stdin.setRawMode(true);
+  if (process.stdin.setRawMode) process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdin.on('keypress', onKey);
   process.stdout.on('resize', render);
+  enterAlt();
   hideCursor();
   render();
 
   return finished;
 }
 
-module.exports = { start, wrap, fit };
+module.exports = { start, wrap, fit, cell };

@@ -16,7 +16,7 @@ function test(name, fn) {
   cases.push([name, fn]);
 }
 
-const { buildArgs } = require('../lib/shortcut');
+const { buildArgs, stripJsonComments, themeProfile } = require('../lib/shortcut');
 
 const PS = 'C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 
@@ -48,6 +48,45 @@ test('sem wt, o fallback do powershell pode usar ";" (lá ele é do shell)', () 
 test('sem projeto, a linha não deixa espaço solto no fim', () => {
   const line = buildArgs({ wt: true, psExe: PS, project: '' });
   assert(line.endsWith('-Command o1mem repl'), `sobrou lixo no fim: "${line}"`);
+});
+
+// --- tema da janela -------------------------------------------------------
+
+test('com perfil, a linha invoca -p ANTES da linha de comando', () => {
+  const line = buildArgs({ wt: true, psExe: PS, project: '', profile: true });
+  assert(line.includes('-p "O(1)mem"'), `faltou -p: ${line}`);
+  assert(
+    line.indexOf('-p "O(1)mem"') < line.indexOf(PS),
+    'o -p depois do executável seria lido como argumento do programa, não do wt'
+  );
+  assert(!line.includes(';'), '";" reapareceu na linha do wt');
+});
+
+test('sem perfil aplicado, o atalho ainda abre (só sem tema)', () => {
+  const line = buildArgs({ wt: true, psExe: PS, project: '', profile: false });
+  assert(!line.includes('-p '), 'não deve pedir um perfil que não foi criado');
+  assert(line.endsWith('-Command o1mem repl'), `linha quebrada: ${line}`);
+});
+
+test('o tema é preto, 90% e sem acrílico', () => {
+  const p = themeProfile(PS);
+  assert.strictEqual(p.background, '#000000');
+  assert.strictEqual(p.opacity, 90, 'translucidez demais compete com o texto — a leitura ganha');
+  assert.strictEqual(p.useAcrylic, false, 'acrílico deixa o papel de parede vazar por trás do texto');
+});
+
+test('stripJsonComments não estraga "//" dentro de string', () => {
+  const src = '{\n // comentario\n "a": "https://x.com/y", /* bloco */ "b": "C:\\\\tmp" \n}';
+  const d = JSON.parse(stripJsonComments(src));
+  assert.strictEqual(d.a, 'https://x.com/y', 'comeu a URL junto com o comentário');
+  assert.strictEqual(d.b, 'C:\\tmp');
+});
+
+test('stripJsonComments não se perde com aspas escapada antes de //', () => {
+  const src = '{"a": "diz \\"oi\\"", // fim\n "b": 1}';
+  const d = JSON.parse(stripJsonComments(src));
+  assert.strictEqual(d.a, 'diz "oi"');
+  assert.strictEqual(d.b, 1);
 });
 
 (async () => {

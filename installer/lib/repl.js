@@ -177,10 +177,15 @@ function resolveHitPath(root, hit) {
   return null;
 }
 
-// Verde fósforo, e só quando há terminal: em pipe as sequências ANSI viram lixo
-// no arquivo de saída.
+// Verde só nos ACENTOS, branco no corpo. A primeira versão pintava tudo de
+// verde e usava `\x1b[2;32m` (verde atenuado) para metadados, dicas, vizinhos e
+// prompts — ou seja, para a maior parte da tela. Sobre fundo translúcido isso
+// fica ilegível: o atenuado mistura o verde com o que está atrás da janela.
+// Corpo de texto se lê em branco; o verde marca onde olhar.
+//
+// Só quando há terminal: em pipe as sequências ANSI viram lixo no arquivo.
 const color = process.stdout.isTTY
-  ? { bright: '\x1b[92m', green: '\x1b[32m', dim: '\x1b[2;32m', off: '\x1b[0m' }
+  ? { bright: '\x1b[1;92m', green: '\x1b[97m', dim: '\x1b[38;5;250m', off: '\x1b[0m' }
   : { bright: '', green: '', dim: '', off: '' };
 
 /**

@@ -494,6 +494,11 @@ async function cmdUninstall() {
       case 'atalho': {
         const r = require('./lib/shortcut').createDesktopShortcut({ project: args[0] });
         console.log(r.created ? `✅ Atalho criado: ${r.path}` : `⚠️  ${r.reason}`);
+        if (r.theme) {
+          console.log(r.theme.ok
+            ? `✅ Perfil "${r.theme.profile}" ${r.theme.created ? 'criado' : 'atualizado'} (preto, opacidade ${r.theme.opacity})`
+            : `⚠️  Tema da janela não aplicado: ${r.theme.reason}`);
+        }
         break;
       }
       case 'config':

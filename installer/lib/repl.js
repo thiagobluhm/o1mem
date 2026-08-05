@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const readline = require('readline');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 
 const paths = require('./paths');
 const { checkPython } = require('./preflight');
@@ -210,6 +210,60 @@ function printResult(r) {
   });
 }
 
+// ===========================================================================
+// Menu. O terminal abre perguntando o projeto e depois o que fazer, em vez de
+// um prompt vazio: quem abre o app pelo atalho não vem com um comando na
+// cabeça, vem com uma dúvida. Números são o mínimo de digitação possível.
+// ===========================================================================
+
+/** Lê uma opção numérica. Devolve null para entrada inválida — quem chama decide
+ *  se repete a pergunta ou assume um padrão. */
+function parseChoice(input, max) {
+  const t = String(input == null ? '' : input).trim();
+  if (!/^\d+$/.test(t)) return null;
+  const n = parseInt(t, 10);
+  return n >= 0 && n <= max ? n : null;
+}
+
+/** Monta as linhas do menu de projetos, marcando o do diretório atual. */
+function projectMenu(slugs, current) {
+  const lines = [`${color.bright}ESCOLHA O PROJETO${color.off}`];
+  slugs.forEach((s, i) => {
+    const mark = s === current ? `${color.dim}  (deste diretório)${color.off}` : '';
+    lines.push(`  ${color.bright}${i + 1}${color.off}. ${s}${mark}`);
+  });
+  lines.push(`  ${color.bright}0${color.off}. sair`);
+  return lines;
+}
+
+const ACTIONS = [
+  'Buscar no acervo',
+  'Ver os handovers mais recentes',
+  'Estatísticas do acervo (chunks, data da indexação)',
+  'Trocar de projeto'
+];
+
+function actionMenu() {
+  const lines = [`${color.bright}QUER FAZER O QUE?${color.off}`];
+  ACTIONS.forEach((a, i) => lines.push(`  ${color.bright}${i + 1}${color.off}. ${a}`));
+  lines.push(`  ${color.bright}0${color.off}. Sair`);
+  return lines;
+}
+
+/** Handovers do projeto, mais recentes primeiro. */
+function listHandovers(root) {
+  const dir = path.join(root, '..', 'handovers');
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter(f => f.toLowerCase().endsWith('.md'))
+      .map(f => ({ name: f, path: path.join(dir, f), mtime: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+  } catch {
+    return [];
+  }
+}
+
 async function runRepl(argv) {
   // Aceita `repl --project <slug>` e `repl <slug>`: o alias `mem` do shell só
   // repassa argumentos, e digitar `mem cge2026` é o que a mão faz sozinha.
@@ -219,37 +273,54 @@ async function runRepl(argv) {
     else if (!argv[i].startsWith('-') && !project) project = argv[i];
   }
 
+  const slugs = paths.listProjects();
+  if (!slugs.length) throw new Error('nenhum projeto com memory/ em ~/.claude/projects');
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = q => new Promise(res => rl.question(q, a => res(a)));
+  const c = color;
+
+  console.log(`\n${c.bright}O(1)mem${c.off} ${c.dim}— busca no acervo de memória${c.off}\n`);
+
+  // 1. Projeto. O do diretório atual é só a sugestão do Enter — a escolha é dele.
   if (!project) {
-    project = detectProject(process.cwd());
-    if (project) console.log(`📂 Projeto deste diretório: ${project}`);
-    else {
-      const slugs = paths.listProjects();
-      if (!slugs.length) throw new Error('nenhum projeto com memory/ em ~/.claude/projects');
-      project = slugs.length === 1 ? slugs[0] : await chooseProject(slugs);
-      if (!project) throw new Error('nenhum projeto escolhido');
+    const detected = detectProject(process.cwd());
+    for (;;) {
+      console.log(projectMenu(slugs, detected).join('\n'));
+      const def = detected ? slugs.indexOf(detected) + 1 : 1;
+      const a = await ask(`\n${c.bright}>${c.off} [${def}] `);
+      const n = a.trim() === '' ? def : parseChoice(a, slugs.length);
+      if (n === null) {
+        console.log(`${c.dim}  opção inválida${c.off}\n`);
+        continue;
+      }
+      if (n === 0) {
+        rl.close();
+        return;
+      }
+      project = slugs[n - 1];
+      break;
     }
   }
 
   let { port, health: h } = await ensureDaemon(project);
-  let k = 5;
-  let lastHits = [];
   let root = h.root;
+  let k = 8;
 
-  // O padrão é o fluxo (mesmo layout do `o1mem query`): o histórico rola para
-  // trás como em qualquer terminal, e não há frame para piscar. A tela cheia
-  // navegável continua disponível em `--tui`.
+  const runQuery = async text => {
+    const url = `/query?project=${encodeURIComponent(h.project)}&text=${encodeURIComponent(text)}&k=${k}`;
+    const r = await get(port, url);
+    if (r.status !== 200) throw new Error(r.json.error || `HTTP ${r.status}`);
+    return r.json;
+  };
+
+  // A tela cheia navegável continua disponível, agora atrás de --tui.
   if (process.stdin.isTTY && argv.includes('--tui')) {
+    rl.close();
     return require('./tui').start({
       project: () => h.project,
-      projects: () => paths.listProjects(),
-      query: async (text, n) => {
-        const r = await get(
-          port,
-          `/query?project=${encodeURIComponent(h.project)}&text=${encodeURIComponent(text)}&k=${n}`
-        );
-        if (r.status !== 200) throw new Error(r.json.error || `HTTP ${r.status}`);
-        return r.json;
-      },
+      projects: () => slugs,
+      query: (text, n) => runQuery(text, n),
       open: hit => resolveHitPath(root, hit),
       setProject: async slug => {
         ({ port, health: h } = await ensureDaemon(slug));
@@ -258,71 +329,87 @@ async function runRepl(argv) {
     });
   }
 
-  const c = color;
-  console.log(`\n${c.bright}O(1)mem${c.off} ${c.dim}— daemon na porta ${port}${c.off}`);
-  console.log(`${c.dim}projeto : ${h.project}   modelo: ${h.model}${c.off}`);
-  console.log(`${c.dim}comandos: :projeto <slug>  :abrir <N>  :k <N>  :sair${c.off}\n`);
+  console.log(`\n${c.dim}projeto : ${h.project}   modelo: ${h.model}${c.off}`);
 
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = () => rl.setPrompt(`${c.bright}[${h.project}]${c.off} > `) || rl.prompt();
-  ask();
+  // 2. Laço do menu de ações.
+  for (;;) {
+    console.log('\n' + actionMenu().join('\n'));
+    const a = await ask(`\n${c.bright}>${c.off} `);
+    const n = parseChoice(a, ACTIONS.length);
 
-  rl.on('line', async line => {
-    // pausa enquanto processa: sem isto, linhas em rajada (pipe, colar várias
-    // de uma vez) disparam handlers concorrentes e o output sai atropelado.
-    rl.pause();
-    const text = line.trim();
+    if (n === null) {
+      console.log(`${c.dim}  opção inválida${c.off}`);
+      continue;
+    }
+    if (n === 0) break;
+
     try {
-      if (!text) {
-        // nada
-      } else if (text === ':sair' || text === ':q') {
-        rl.close();
-        return;
-      } else if (text.startsWith(':projeto')) {
-        const slug = text.slice(':projeto'.length).trim();
-        if (!slug) {
-          console.log(`  projeto atual: ${h.project}`);
-        } else {
-          ({ port, health: h } = await ensureDaemon(slug));
-          root = h.root;
-          lastHits = [];
-          console.log(`  ✅ agora em ${h.project}`);
-        }
-      } else if (text.startsWith(':k')) {
-        const n = parseInt(text.slice(2).trim(), 10);
-        if (n > 0) k = n;
-        console.log(`  k = ${k}`);
-      } else if (text.startsWith(':abrir')) {
-        const n = parseInt(text.slice(':abrir'.length).trim(), 10);
-        const hit = lastHits[n - 1];
-        if (!hit) {
-          console.log('  hit inexistente — rode uma busca antes.');
-        } else {
-          const p = resolveHitPath(root, hit);
-          if (!p) console.log(`  arquivo não encontrado: ${hit.source}`);
-          else console.log('\n' + fs.readFileSync(p, 'utf8') + `\n  --- ${p}`);
-        }
-      } else {
-        const url = `/query?project=${encodeURIComponent(h.project)}&text=${encodeURIComponent(text)}&k=${k}`;
-        const r = await get(port, url);
-        if (r.status !== 200) {
-          console.log(`  ❌ ${r.json.error || r.status}`);
-        } else {
-          lastHits = r.json.hits;
+      if (n === 1) {
+        // Busca: fica no laço até "0", porque uma pergunta puxa a próxima.
+        let lastHits = [];
+        for (;;) {
+          const q = await ask(`\n${c.bright}pergunta${c.off} (0 volta ao menu): `);
+          if (q.trim() === '0') break;
+          if (!q.trim()) continue;
+          const r = await runQuery(q.trim());
+          lastHits = r.hits;
           console.log('');
-          printResult(r.json);
+          printResult(r);
+          if (lastHits.length) {
+            const o = await ask(`${c.dim}abrir qual? (número, ou Enter para nova pergunta)${c.off} `);
+            const idx = parseChoice(o, lastHits.length);
+            if (idx) {
+              const p = resolveHitPath(root, lastHits[idx - 1]);
+              if (!p) console.log(`  ${c.dim}arquivo não encontrado${c.off}`);
+              else console.log('\n' + fs.readFileSync(p, 'utf8') + `\n${c.dim}  --- ${p}${c.off}`);
+            }
+          }
+        }
+      } else if (n === 2) {
+        const hs = listHandovers(root);
+        if (!hs.length) {
+          console.log(`  ${c.dim}nenhum handover neste projeto${c.off}`);
+          continue;
+        }
+        hs.slice(0, 15).forEach((x, i) =>
+          console.log(`  ${c.bright}${i + 1}${c.off}. ${x.name} ${c.dim}(${new Date(x.mtime).toISOString().slice(0, 10)})${c.off}`)
+        );
+        const o = await ask(`\n${c.dim}abrir qual? (Enter volta)${c.off} `);
+        const idx = parseChoice(o, Math.min(hs.length, 15));
+        if (idx) console.log('\n' + fs.readFileSync(hs[idx - 1].path, 'utf8'));
+      } else if (n === 3) {
+        const { pythonCmd } = checkPython();
+        spawnSync(pythonCmd, [paths.ragCliPath(), '--project', h.project, 'stats'], {
+          stdio: 'inherit'
+        });
+      } else if (n === 4) {
+        console.log('');
+        console.log(projectMenu(slugs, null).join('\n'));
+        const p = await ask(`\n${c.bright}>${c.off} `);
+        const idx = parseChoice(p, slugs.length);
+        if (idx) {
+          ({ port, health: h } = await ensureDaemon(slugs[idx - 1]));
+          root = h.root;
+          console.log(`  ${c.dim}agora em ${h.project}${c.off}`);
         }
       }
     } catch (e) {
       console.log(`  ❌ ${e.message}`);
     }
-    ask();
-  });
+  }
 
-  return new Promise(resolve => rl.on('close', () => {
-    console.log('\nAté. (o daemon segue vivo e morre sozinho após 30min ocioso)');
-    resolve();
-  }));
+  rl.close();
+  console.log(`\n${c.dim}Até. (o daemon segue vivo e morre sozinho após 30min ocioso)${c.off}`);
 }
 
-module.exports = { runRepl, ensureDaemon, slugMatches, resolveHitPath, detectProject };
+module.exports = {
+  runRepl,
+  ensureDaemon,
+  slugMatches,
+  resolveHitPath,
+  detectProject,
+  parseChoice,
+  projectMenu,
+  actionMenu,
+  listHandovers
+};

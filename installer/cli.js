@@ -226,7 +226,9 @@ async function cmdInstall() {
     } else {
       const agree = await prompt.confirm('\nCriar o atalho "O(1)mem" na área de trabalho?', true);
       if (agree) {
-        const r = createDesktopShortcut({ project: projectsToIndex[0] });
+        // Sem projeto fixo: o terminal abre pelo menu "ESCOLHA O PROJETO", que é
+        // o ponto de partida certo para quem entrou pelo ícone.
+        const r = createDesktopShortcut();
         console.log(r.created ? `✅ Atalho criado: ${r.path}` : `⚠️  ${r.reason} (rode \`o1mem atalho\` depois)`);
       }
     }

@@ -94,8 +94,16 @@ async function ensureDaemon(project) {
   const { pythonCmd } = checkPython();
   const args = [paths.daemonCliPath()];
   if (project) args.push('--project', project);
-  const child = spawn(pythonCmd, args, { detached: true, stdio: 'ignore' });
-  child.unref();
+  // stderr em pipe, não 'ignore': o daemon morre cedo e com mensagem útil
+  // ("'o1mem' e ambiguo", projeto sem índice) — engolir isso vira uma espera
+  // de 3 minutos em silêncio para um erro que já era conhecido no segundo 1.
+  const child = spawn(pythonCmd, args, { detached: true, stdio: ['ignore', 'ignore', 'pipe'] });
+  let stderr = '';
+  let died = null;
+  child.stderr.on('data', c => (stderr += c));
+  child.on('exit', code => {
+    if (code !== 0) died = code;
+  });
 
   console.log('⏳ Subindo daemon (carrega o modelo uma vez, ~45s)...');
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
@@ -104,7 +112,19 @@ async function ensureDaemon(project) {
     const fresh = readDaemonJson();
     if (fresh && fresh.port) {
       const h = await health(fresh.port);
-      if (h) return { port: fresh.port, health: h };
+      if (h) {
+        child.stderr.destroy();
+        child.unref();
+        return { port: fresh.port, health: h };
+      }
+    }
+    if (died !== null) {
+      throw new Error(
+        // o Python já prefixa "ERRO:"; o cli.js prefixa "❌ Erro:" — sem o strip
+        // o usuário lê o mesmo prefixo duas vezes
+        (stderr.trim().replace(/^ERRO:\s*/, '') || `daemon saiu com código ${died}`) +
+          (project ? `\n     (projeto pedido: ${project})` : '')
+      );
     }
   }
   throw new Error('daemon não subiu a tempo (veja `o1mem status`)');
@@ -132,9 +152,12 @@ function printHits(hits) {
 }
 
 async function runRepl(argv) {
+  // Aceita `repl --project <slug>` e `repl <slug>`: o alias `mem` do shell só
+  // repassa argumentos, e digitar `mem cge2026` é o que a mão faz sozinha.
   let project = null;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--project' && i + 1 < argv.length) project = argv[++i];
+    else if (!argv[i].startsWith('-') && !project) project = argv[i];
   }
 
   let { port, health: h } = await ensureDaemon(project);

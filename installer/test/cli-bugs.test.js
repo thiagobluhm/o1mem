@@ -156,6 +156,28 @@ test('REPL: slug exato ganha de substring, e substring ainda casa', () => {
   assert(slugMatches('c--Projetos-O1MEM', null), 'sem projeto pedido, qualquer um serve');
 });
 
+test('REPL: slug completo não casa por prefixo com o projeto vizinho', () => {
+  const { slugMatches } = require('../lib/repl');
+  const { listProjects } = require('../lib/paths');
+  const [a, b] = listProjects()
+    .slice()
+    .sort()
+    .reduce((acc, p, _i, all) => acc || pickPrefixPair(p, all), null) || [];
+  if (!a) {
+    console.log('   (pulado: esta máquina não tem par de slugs em prefixo)');
+    return;
+  }
+  assert(
+    !slugMatches(b, a),
+    `daemon de "${b}" não pode atender um pedido por "${a}" — é outro acervo`
+  );
+});
+
+function pickPrefixPair(p, all) {
+  const longer = all.find(q => q !== p && q.toLowerCase().startsWith(p.toLowerCase()));
+  return longer ? [p, longer] : null;
+}
+
 test('REPL: handover resolve na pasta irmã de memory/', () => {
   const { resolveHitPath } = require('../lib/repl');
   const os = require('os');

@@ -63,7 +63,12 @@ function slugMatches(served, asked) {
   if (!asked) return true;
   const s = (served || '').toLowerCase();
   const a = asked.toLowerCase();
-  return s === a || s.includes(a);
+  if (s === a) return true;
+  // Um slug completo NUNCA casa por substring com outro: `c--Projetos-O1MEM` é
+  // prefixo de `c--Projetos-O1MEM-skills`, e sem esta guarda o REPL reusava
+  // silenciosamente o daemon do projeto vizinho — respondendo do acervo errado.
+  if (paths.listProjects().some(p => p.toLowerCase() === a)) return false;
+  return s.includes(a);
 }
 
 function sleep(ms) {
@@ -172,14 +177,36 @@ function resolveHitPath(root, hit) {
   return null;
 }
 
-function printHits(hits) {
-  if (!hits.length) {
-    console.log('  (nenhum hit)');
+// Verde fósforo, e só quando há terminal: em pipe as sequências ANSI viram lixo
+// no arquivo de saída.
+const color = process.stdout.isTTY
+  ? { bright: '\x1b[92m', green: '\x1b[32m', dim: '\x1b[2;32m', off: '\x1b[0m' }
+  : { bright: '', green: '', dim: '', off: '' };
+
+/**
+ * Mesmo formato do `o1mem query`: cabeçalho com projeto/modelo/tempos e um
+ * bloco por hit. Em fluxo, não em tela cheia — o histórico continua rolando
+ * para trás como em qualquer terminal, que é o que se quer de uma busca.
+ */
+function printResult(r) {
+  const c = color;
+  console.log(
+    `${c.dim}projeto : ${r.project}   modelo: ${r.model}${c.off}\n` +
+      `${c.dim}tempos  : ${JSON.stringify(r.timings)}${c.off}\n`
+  );
+  if (!r.hits.length) {
+    console.log('  (nenhum resultado)\n');
     return;
   }
-  hits.forEach((h, i) => {
-    console.log(`\n  ${i + 1}. [${h.score.toFixed(3)}] (${h.kind}) ${h.source}`);
-    console.log('     ' + h.excerpt.replace(/\s+/g, ' ').slice(0, 220));
+  r.hits.forEach((h, i) => {
+    console.log(
+      `${c.bright}[${h.score.toFixed(3)}] ${i + 1}. ${h.id || h.source}  (${h.kind})${c.off}`
+    );
+    console.log(`${c.green}        ${h.excerpt.replace(/\s+/g, ' ').slice(0, 160)}${c.off}`);
+    for (const n of h.graph_neighbors || []) {
+      console.log(`${c.dim}        ~ ${n.id}${c.off}`);
+    }
+    console.log('');
   });
 }
 
@@ -208,9 +235,10 @@ async function runRepl(argv) {
   let lastHits = [];
   let root = h.root;
 
-  // Com TTY, a tela navegável; em pipe/CI, o fluxo linha-a-linha abaixo — que é
-  // o que os testes exercitam e o que sobra quando o terminal não coopera.
-  if (process.stdin.isTTY && !argv.includes('--plain')) {
+  // O padrão é o fluxo (mesmo layout do `o1mem query`): o histórico rola para
+  // trás como em qualquer terminal, e não há frame para piscar. A tela cheia
+  // navegável continua disponível em `--tui`.
+  if (process.stdin.isTTY && argv.includes('--tui')) {
     return require('./tui').start({
       project: () => h.project,
       projects: () => paths.listProjects(),
@@ -230,11 +258,13 @@ async function runRepl(argv) {
     });
   }
 
-  console.log(`\n✅ Daemon vivo (porta ${port}) — projeto ${h.project}`);
-  console.log('   :projeto <slug>  :abrir <N>  :k <N>  :sair\n');
+  const c = color;
+  console.log(`\n${c.bright}O(1)mem${c.off} ${c.dim}— daemon na porta ${port}${c.off}`);
+  console.log(`${c.dim}projeto : ${h.project}   modelo: ${h.model}${c.off}`);
+  console.log(`${c.dim}comandos: :projeto <slug>  :abrir <N>  :k <N>  :sair${c.off}\n`);
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = () => rl.setPrompt(`[${h.project}] > `) || rl.prompt();
+  const ask = () => rl.setPrompt(`${c.bright}[${h.project}]${c.off} > `) || rl.prompt();
   ask();
 
   rl.on('line', async line => {
@@ -279,9 +309,8 @@ async function runRepl(argv) {
           console.log(`  ❌ ${r.json.error || r.status}`);
         } else {
           lastHits = r.json.hits;
-          printHits(lastHits);
-          const t = r.json.timings || {};
-          console.log(`\n  (${t.embed_s || 0}s embed · ${t.search_s || 0}s busca)`);
+          console.log('');
+          printResult(r.json);
         }
       }
     } catch (e) {

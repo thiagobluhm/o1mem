@@ -9,6 +9,7 @@ const { spawnSync } = require('child_process');
 const net = require('net');
 
 const paths = require('./lib/paths');
+const { buildPassthroughArgs } = require('./lib/passthrough');
 const { preflight, checkPython, PreflightError } = require('./lib/preflight');
 const prompt = require('./lib/prompt');
 const { installDeps } = require('./lib/pip');
@@ -350,23 +351,8 @@ function checkDaemonHealth(port) {
 }
 
 function cmdIndex() {
-  // Passthrough ao Python CLI
-  // O argparse de o1mem_rag.py espera: python script.py [--project X] index [--full] ...
-  // Mas o npm passthrough traz args já depois de "index"
-  // Solução: busca por --project/-k na lista args e reposiciona antes do cmd
-
-  let projectArg = [];
-  let otherArgs = [];
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--project' && i + 1 < args.length) {
-      projectArg = [args[i], args[i + 1]];
-      i++; // skip next
-    } else {
-      otherArgs.push(args[i]);
-    }
-  }
-
-  const pyArgs = [RAG_CLI].concat(projectArg, ['index'], otherArgs);
+  // Passthrough ao Python CLI (ordem/forma dos args: lib/passthrough.js)
+  const pyArgs = buildPassthroughArgs(RAG_CLI, 'index', args);
   const { pythonCmd } = checkPython();
   const result = spawnSync(pythonCmd, pyArgs, { stdio: 'inherit' });
   process.exit(result.status || 0);
@@ -374,18 +360,7 @@ function cmdIndex() {
 
 function cmdQuery() {
   // Passthrough ao Python CLI
-  let projectArg = [];
-  let otherArgs = [];
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--project' && i + 1 < args.length) {
-      projectArg = [args[i], args[i + 1]];
-      i++; // skip next
-    } else {
-      otherArgs.push(args[i]);
-    }
-  }
-
-  const pyArgs = [RAG_CLI].concat(projectArg, ['query'], otherArgs);
+  const pyArgs = buildPassthroughArgs(RAG_CLI, 'query', args);
   const { pythonCmd } = checkPython();
   const result = spawnSync(pythonCmd, pyArgs, { stdio: 'inherit' });
   process.exit(result.status || 0);

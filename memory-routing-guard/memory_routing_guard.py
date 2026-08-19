@@ -44,8 +44,16 @@ RE_MEM_PATH = re.compile(
     r"[/\\]\.claude[/\\]projects[/\\]([^/\\]+)[/\\]memory[/\\][^/\\]+\.md$",
     re.IGNORECASE,
 )
-# `C:\Projetos\Foo\bar` ou `C:/Projetos/Foo/bar` -- so a raiz do caminho importa
-RE_PATH_MENTION = re.compile(r"([A-Za-z]:[\\/][^\s`\"'()]+)")
+# Mencao a caminho absoluto, nos dois mundos -- so a raiz do caminho importa:
+#   Windows: `C:\Projetos\Foo\bar` ou `C:/Projetos/Foo/bar`   (ramo original)
+#   POSIX:   `/Users/t/_PESSOAIS/o1mem/...`                    (acrescentado)
+# O ramo Windows fica identico: em POSIX ele nunca casava nada, e o guarda
+# passava por "aprovado" sem ter olhado. A alternativa POSIX exige uma letra
+# logo apos a barra pra nao morder '/' solto no meio de texto corrido.
+RE_PATH_MENTION = re.compile(
+    r"([A-Za-z]:[\\/][^\s`\"'()]+"
+    r"|/[A-Za-z][^\s`\"'()]*)"
+)
 
 
 def known_slugs():
@@ -57,12 +65,26 @@ def known_slugs():
 
 
 def slugify(path_head):
-    """Mesma convencao do harness: letra minuscula, `:` e separadores -> `-`."""
+    """Mesma convencao do harness. Copia local de tools/o1mem_slug.py.
+
+    Duplicada de proposito: este guarda roda como hook standalone e nao pode
+    importar de outra pasta do repo. tests/test_slug_for.py obriga esta copia
+    a bater com a canonica.
+
+    A versao anterior so trocava `:` e separadores, deixando o '_' passar --
+    entao `/Users/t/_PESSOAIS/x` virava slug com '_' e nunca batia com pasta
+    nenhuma. Divergir aqui e silencioso: o guarda nao reconhece o projeto
+    mencionado e LIBERA a escrita no lugar errado, que e o que ele existe pra
+    impedir. (Em caminho Windows com '_' o defeito era o mesmo.)
+
+    O lowercase do drive e feito na mao, sem splitdrive: o guarda pode rodar
+    num SO e ler mencao a caminho do outro, e splitdrive so entende o formato
+    do SO em que roda.
+    """
     p = path_head.rstrip("\\/")
     if len(p) >= 2 and p[1] == ":":
         p = p[0].lower() + p[1:]
-    p = p.replace(":", "-").replace("\\", "-").replace("/", "-")
-    return p
+    return re.sub(r"[^A-Za-z0-9]", "-", p)
 
 
 def target_slug_from_file(file_path):
@@ -76,12 +98,19 @@ def target_slug_from_file(file_path):
 def mentioned_foreign_slug(text, own_slug, slugs):
     for m in RE_PATH_MENTION.finditer(text or ""):
         raw = m.group(1)
-        # só a raiz de 2-3 componentes basta pra identificar o projeto
         parts = re.split(r"[\\/]", raw)
-        for depth in (2, 3, 4):
-            if len(parts) < depth:
-                break
-            head = "\\".join(parts[:depth])
+        # Do mais longo pro mais curto: o prefixo MAIS especifico que bate com
+        # um projeto existente e o certo. `.../ss_e_b/curriculos` e projeto
+        # proprio -- parar em `.../ss_e_b` mandaria pra pasta errada.
+        #
+        # A faixa fixa (2,3,4) era medida pra `C:\Projetos\Foo`. Um caminho
+        # POSIX de projeto tem mais componentes (e um vazio na frente, da barra
+        # inicial), entao nunca alcancava a profundidade certa. Sem teto fixo,
+        # projeto aninhado fundo tambem passa a ser encontrado no Windows.
+        for depth in range(len(parts), 1, -1):
+            # junta com '/' pra nao destruir a barra inicial do POSIX; slugify
+            # trata os dois separadores igual de qualquer forma
+            head = "/".join(parts[:depth])
             cand = slugify(head)
             if cand in slugs and cand != own_slug:
                 return cand, head

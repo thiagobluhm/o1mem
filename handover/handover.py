@@ -80,10 +80,29 @@ PROJECTS_DIR = os.path.normpath(os.path.expanduser("~/.claude/projects"))
 
 
 def slug_for(path):
-    """C:\\Projetos\\O1MEM -> c--Projetos-O1MEM"""
+    """Caminho absoluto -> slug de ~/.claude/projects/, do jeito do harness.
+
+    C:\\Projetos\\O1MEM        -> c--Projetos-O1MEM
+    /Users/t/_PESSOAIS/o1mem -> -Users-t--PESSOAIS-o1mem
+
+    A regra do harness e uma so: baixa a letra do drive e troca TODO caractere
+    fora de [A-Za-z0-9] por '-'. Os dois exemplos acima caem dela sozinhos --
+    o ':' e a '\\' viram os dois tracos do Windows, e a '/' inicial vira o traco
+    unico do POSIX.
+
+    A versao anterior codificava o RESULTADO do caso Windows em vez da regra:
+    '--' fixo mais strip('/'). No Windows batia (menos em caminho com '_'); no
+    POSIX dava traco duplo -- nao ha letra de drive -- e deixava o '_' passar.
+    Slug errado aqui nao da erro visivel: find_project_root() simplesmente
+    nunca acha a memoria e o handover morre dizendo que o projeto nao esta
+    indexado, enquanto o lista entre os disponiveis.
+
+    Definicao canonica em tools/o1mem_slug.py; a copia local existe porque este
+    script e instalado sozinho em ~/.claude/skills/handover/ e nao pode
+    importar do repo. tests/test_slug_for.py amarra as duas.
+    """
     drive, rest = os.path.splitdrive(os.path.abspath(path))
-    return (drive[:1].lower() + "--" +
-            rest.replace("\\", "/").strip("/").replace("/", "-"))
+    return re.sub(r"[^A-Za-z0-9]", "-", drive.lower() + rest)
 
 
 def handover_dir(slug):

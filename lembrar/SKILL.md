@@ -46,7 +46,7 @@ npx @tbluhm82/o1mem query "<pergunta>" --project <slug> -k 5   # projeto explíc
 Instalação a partir do repo, sem npm — chame o Python direto:
 
 ```bash
-python <repo>/rag/o1mem_rag.py --project <slug> query "<pergunta>" -k 5
+python <repo>/rag/o1mem_rag.py --project=<slug> query "<pergunta>" -k 5
 ```
 
 Três coisas que mudam o resultado:

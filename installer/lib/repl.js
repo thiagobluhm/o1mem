@@ -15,6 +15,7 @@ const readline = require('readline');
 const { spawn, spawnSync } = require('child_process');
 
 const paths = require('./paths');
+const { slugForPath, buildDaemonArgs } = require('./slug');
 const { checkPython } = require('./preflight');
 
 const STARTUP_TIMEOUT_MS = 180000; // carga do modelo na 1a subida chega a ~47s
@@ -85,7 +86,7 @@ function detectProject(cwd) {
   const known = new Set(paths.listProjects());
   let dir = path.resolve(cwd || process.cwd());
   for (;;) {
-    const slug = dir.replace(/[\\/:]/g, '-');
+    const slug = slugForPath(dir);
     if (known.has(slug)) return slug;
     const parent = path.dirname(dir);
     if (parent === dir) return null;
@@ -129,8 +130,7 @@ async function ensureDaemon(project) {
   }
 
   const { pythonCmd } = checkPython();
-  const args = [paths.daemonCliPath()];
-  if (project) args.push('--project', project);
+  const args = buildDaemonArgs(paths.daemonCliPath(), project);
   // stderr em pipe, não 'ignore': o daemon morre cedo e com mensagem útil
   // ("'o1mem' e ambiguo", projeto sem índice) — engolir isso vira uma espera
   // de 3 minutos em silêncio para um erro que já era conhecido no segundo 1.

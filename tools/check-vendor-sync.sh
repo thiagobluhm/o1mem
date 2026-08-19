@@ -23,6 +23,7 @@ handover/handover.py:installer/skills/handover/handover.py
 handover/SKILL.md:installer/skills/handover/SKILL.md
 organizador-mem/SKILL.md:installer/skills/organizador-mem/SKILL.md
 retomar/SKILL.md:installer/skills/retomar/SKILL.md
+lembrar/SKILL.md:installer/skills/lembrar/SKILL.md
 rag/o1mem_rag.py:installer/vendor/rag/o1mem_rag.py
 rag/o1mem_rag_daemon.py:installer/vendor/rag/o1mem_rag_daemon.py
 rag/o1mem_distill.py:installer/vendor/rag/o1mem_distill.py

@@ -63,7 +63,7 @@ npx @tbluhm82/o1mem query "<assunto>" --project <slug> -k 5
 > apontar para o caminho fixo fazia a consulta ao acervo frio falhar **em silêncio**: a
 > retomada seguia sem o frio e ninguém notava. O `npx` resolve o script nos dois tipos de
 > instalação. Só se o `npx` não existir, caia para o script local:
-> `python ~/.claude/skills/rag/o1mem_rag.py --project <slug> query "<assunto>" -k 5`.
+> `python ~/.claude/skills/rag/o1mem_rag.py --project=<slug> query "<assunto>" -k 5`.
 
 Os hits vêm marcados com o tipo. Trate-os assim:
 

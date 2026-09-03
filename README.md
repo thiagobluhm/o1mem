@@ -1,15 +1,15 @@
-# 🪙 O(1)mem — Token Economy for Claude Code
+# 🧠 O(1)mem — Memory that persists, retrieves, and governs itself
 
 Read this in other languages: [Português (Brasil)](./docs/README.ptbr.md)
 
-### Every new session opened after `/clear` picks up the thread right from the index — without re-paying for a dragged conversation
+### The thread survives the `/clear` — distilled into an index read in constant time, searchable when the index is not enough, and checkable when two versions of a fact collide
 🇧🇷 Made in Brazil
 
 ---
 
 ![status](https://img.shields.io/badge/status-field--tested-green)
 ![tool](https://img.shields.io/badge/runtime-Claude%20Code-8A2BE2)
-![focus](https://img.shields.io/badge/focus-token%20economy-brightgreen)
+![focus](https://img.shields.io/badge/focus-living%20memory-brightgreen)
 ![approach](https://img.shields.io/badge/chunking-agentic-blue)
 ![npm](https://img.shields.io/badge/npm-%40tbluhm82%2Fo1mem-CB3837)
 ![lang](https://img.shields.io/badge/docs-en-blue)
@@ -32,8 +32,10 @@ Read this in other languages: [Português (Brasil)](./docs/README.ptbr.md)
 - `retomar` — **resolves which project** to resume before reading any memory, for developers working on multiple active projects on the same machine.
 - `lembrar` — **answers a question about the past** by querying the cold archive on demand, so "do you remember X?" stops being answered with "no" while the answer sits indexed one command away.
 - `handover-nudge-hook` — **notifies the right time** to run `/handover`, measuring conversation growth turn-by-turn (with built-in value guardrails and a mute route).
-- `graph` — **traverses by structure**: turns the `[[wikilinks]]` you already write into a navigable graph (CLI + page). It does not enter the boot sequence.
+- `snapshot` — **captures without being asked**: the hook records what the session actually did (questions asked, files touched, commands run) at the moment context is lost. Raw material, not a handover — it exists so that a `/clear` without a handover doesn't cost you everything.
+- `graph` — **traverses by structure**: turns the `[[wikilinks]]` you already write into a navigable graph (CLI + page), now with **typed relations** (`[[fixes:x]]`, `[[contradicts:x]]`) and a zero-LLM check for facts that contradict each other while both are still live. It does not enter the boot sequence.
 - `rag` — **traverses by meaning**: semantic search over the cold archive (`MEMORY_ARCHIVE.md`, handovers), for when nobody wrote a wikilink. Also stays out of the boot sequence.
+- `eval` — **the recall number**: `hit@k` and `MRR` over the real archive against a BM25 baseline, so the cap is defended with a measurement instead of an architectural claim.
 - **npm installer** (`@tbluhm82/o1mem`) — packages Python + Node in a single command: detects the environment, indexes projects, and registers the hook.
 
 👉 One does the cleanup. The other prevents re-soiling. The hook notifies at the right time. The graph and RAG traverse what's already written. Together, they close the loop.
@@ -289,8 +291,8 @@ Two installation paths — select based on your system setup:
 | **Git only** | clone + copy folders (below) | skills only; hook and `rag` require manual setup |
 
 ```bash
-git clone https://github.com/thiagobluhm/o1mem-skills.git
-cp -r o1mem-skills/organizador-mem o1mem-skills/handover o1mem-skills/retomar <your-project>/.claude/skills/
+git clone https://github.com/thiagobluhm/o1mem.git
+cp -r o1mem/organizador-mem o1mem/handover o1mem/retomar <your-project>/.claude/skills/
 ```
 
 If working on **multiple active projects** (sessions switching between directories), the `retomar` skill resolves **which** project to resume before reading any memory — without it, "resume" defaults to pulling memory from the session's current root directory rather than your target project.

@@ -20,12 +20,15 @@ cd "$ROOT" || exit 1
 # source:vendored_copy
 PAIRS="
 handover/handover.py:installer/skills/handover/handover.py
+handover/snapshot.py:installer/skills/handover/snapshot.py
+handover/snapshot.py:installer/vendor/handover/snapshot.py
 handover/SKILL.md:installer/skills/handover/SKILL.md
 organizador-mem/SKILL.md:installer/skills/organizador-mem/SKILL.md
 retomar/SKILL.md:installer/skills/retomar/SKILL.md
 rag/o1mem_rag.py:installer/vendor/rag/o1mem_rag.py
 rag/o1mem_rag_daemon.py:installer/vendor/rag/o1mem_rag_daemon.py
 rag/o1mem_distill.py:installer/vendor/rag/o1mem_distill.py
+rag/o1mem_eval.py:installer/vendor/rag/o1mem_eval.py
 graph/o1mem_graph.py:installer/vendor/graph/o1mem_graph.py
 handover-nudge-hook/handover_nudge.py:installer/vendor/hook/handover_nudge.py
 "

@@ -20,6 +20,11 @@ Modelo
 Nós    : cada arquivo .md em memory/ (índices MEMORY/MEMORY_ARCHIVE incluídos).
 Arestas: `[[nome]]`            → aresta "wiki"  (fio de raciocínio, escrito à mão)
          `[texto](arquivo.md)` → aresta "index" (pertencimento ao índice quente/frio)
+         `[[corrige:nome]]`    → aresta "wiki" TIPADA (`rel`), que diz o que um
+                                 fato faz com o outro. Verbos: causa, corrige,
+                                 contradiz, substitui, depende (+ aliases en).
+                                 Sem verbo, a aresta segue com `rel: null` —
+                                 a sintaxe antiga não muda de significado.
 
 Resolução de alvo é tolerante por desenho: `[[feedback-overlap-playbooks]]`
 casa com `feedback_overlap_playbooks.md`. Hífen/underscore, caixa e sufixo
@@ -35,6 +40,7 @@ USO
   python o1mem_graph.py orphans               # fora do índice quente E sem quem cite
   python o1mem_graph.py broken                # wikilinks que não resolvem
   python o1mem_graph.py cold --days 30        # candidatos a decay (frios + fora do fio)
+  python o1mem_graph.py contradicoes          # afirmacoes incompativeis ainda vivas (exit 1 se grave)
 
 Opções globais:
   --project <slug|substring>   escolhe o projeto (default: o único que existir,
@@ -64,6 +70,36 @@ RE_MDLINK = re.compile(r"\[[^\]]*\]\(\s*([^)\s]+?\.md)\s*\)")
 RE_FM = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.S)
 RE_FENCE = re.compile(r"```.*?```", re.S)
 RE_CODE = re.compile(r"`[^`\n]*`")
+
+# Verbos de RELACAO reconhecidos num wikilink: `[[corrige:nome]]`.
+#
+# Por que um vocabulario FECHADO. Um wikilink sem verbo continua sendo uma
+# aresta "wiki" sem relacao — a sintaxe antiga nao muda de significado, e um
+# prefixo desconhecido (`[[C:/tmp/x]]`) e tratado como parte do NOME, nunca
+# como relacao inventada. Aceitar qualquer verbo transformaria cada dois-pontos
+# escrito por engano numa relacao fantasma, e o validador de contradicao passa
+# a acusar coisa que ninguem afirmou.
+#
+# Os aliases em ingles existem porque o README do repo e bilingue: quem escreve
+# `[[fixes:x]]` esta afirmando a MESMA coisa que `[[corrige:x]]`, e tratar as
+# duas como relacoes distintas partiria o grafo em dois vocabularios que nao
+# se enxergam.
+RELACOES = {
+    "causa": "causa", "causes": "causa",
+    "corrige": "corrige", "fixes": "corrige",
+    "contradiz": "contradiz", "contradicts": "contradiz",
+    "substitui": "substitui", "supersedes": "substitui",
+    "depende": "depende", "depends": "depende",
+}
+
+
+def split_rel(raw: str) -> tuple:
+    """`corrige:nome` -> ("corrige", "nome"). Sem verbo conhecido -> (None, raw)."""
+    verbo, sep, alvo = raw.partition(":")
+    v = verbo.strip().lower()
+    if sep and v in RELACOES and alvo.strip():
+        return RELACOES[v], alvo.strip()
+    return None, raw
 
 
 # --------------------------------------------------------------------------
@@ -239,21 +275,27 @@ def build_graph(root: str, slug: str = "") -> dict:
             continue
 
         body = strip_code(body)
-        found = [(norm(t), t, "wiki") for t in RE_WIKI.findall(body)]
-        found += [(norm(t), t, "index") for t in RE_MDLINK.findall(body)]
+        found = []
+        for t in RE_WIKI.findall(body):
+            rel, alvo = split_rel(t)
+            found.append((norm(alvo), t, "wiki", rel))
+        found += [(norm(t), t, "index", None) for t in RE_MDLINK.findall(body)]
 
         seen = set()
-        for tgt, raw, kind in found:
+        for tgt, raw, kind, rel in found:
             tgt = _resolve(tgt, nodes)
-            if tgt == src or (tgt, kind) in seen:
+            # a relacao entra na chave: `[[x]]` e `[[corrige:x]]` no mesmo
+            # arquivo sao duas afirmacoes diferentes sobre o mesmo alvo (uma
+            # cita, a outra corrige) e colapsa-las perderia a tipada.
+            if tgt == src or (tgt, kind, rel) in seen:
                 continue
-            seen.add((tgt, kind))
+            seen.add((tgt, kind, rel))
             if tgt in nodes:
-                edges.append({"source": src, "target": tgt, "kind": kind})
+                edges.append({"source": src, "target": tgt, "kind": kind, "rel": rel})
                 nodes[tgt]["deg_in"] += 1
                 nodes[src]["deg_out"] += 1
             else:
-                broken.append({"source": src, "target_raw": raw, "kind": kind})
+                broken.append({"source": src, "target_raw": raw, "kind": kind, "rel": rel})
 
     return {
         "meta": {
@@ -409,6 +451,77 @@ def cold_candidates(g: dict, days: int = 30) -> list:
     return sorted(out, key=lambda n: -n["age_days"])
 
 
+def contradictions(g: dict) -> list:
+    """Afirmacoes que o acervo faz e que nao podem ser verdade ao mesmo tempo.
+
+    Custo ZERO de LLM: tudo aqui sai das arestas tipadas que o humano ja
+    escreveu (`[[corrige:x]]`, `[[contradiz:x]]`, `[[substitui:x]]`) cruzadas
+    com o indice quente e as datas de arquivo. Nao ha julgamento semantico —
+    so a checagem de que a estrutura declarada e consistente consigo mesma.
+
+    Por que isso importa neste produto especificamente: a memoria daqui e
+    DESTILADA, e destilar significa reescrever um fato quando ele muda. O modo
+    de falha proprio dessa mecanica nao e esquecer — e lembrar de duas versoes
+    e carregar as duas no boot como se ambas valessem. O `MEMORY.md` e lido
+    inteiro toda sessao; um fato superado que continua ali nao e um arquivo
+    velho parado num canto, e uma afirmacao ativa competindo com a correcao
+    dela. Achar isso a mao exige reler o acervo todo, que e exatamente o custo
+    que o O(1) existe para nao pagar.
+
+    Regras (todas deterministicas):
+      aberta      A contradiz B e AMBOS estao no indice quente -> as duas
+                  versoes sao carregadas no boot, nenhuma vence.
+      superado    A corrige/substitui B e B AINDA esta no indice quente -> a
+                  versao corrigida continua sendo servida como verdade.
+      retroativa  A corrige/contradiz/substitui B, mas B foi escrito DEPOIS de
+                  A -> ou a relacao esta invertida, ou a correcao ja envelheceu.
+      ciclo       A substitui/corrige B e B substitui/corrige A -> as duas se
+                  declaram a versao mais nova; nao ha ordem.
+    """
+    by_id = {n["id"]: n for n in g["nodes"]}
+    hot = {e["target"] for e in g["edges"]
+           if e["source"] == "memory" and e["kind"] == "index"}
+    sup = {(e["source"], e["target"]) for e in g["edges"]
+           if e.get("rel") in ("corrige", "substitui")}
+    contra = {(e["source"], e["target"]) for e in g["edges"]
+              if e.get("rel") == "contradiz"}
+
+    def _mtime(nid):
+        try:
+            return datetime.fromisoformat(by_id[nid]["mtime"])
+        except (KeyError, ValueError):
+            return None
+
+    out = []
+
+    def add(regra, sev, a, b, detalhe):
+        out.append({"rule": regra, "severity": sev, "source": a, "target": b,
+                    "detail": detalhe})
+
+    for a, b in sorted(contra):
+        if a in hot and b in hot:
+            add("aberta", "alta", a, b,
+                "ambos no indice quente: o boot carrega as duas versoes")
+
+    for a, b in sorted(sup):
+        if b in hot:
+            add("superado", "alta", a, b,
+                "o alvo corrigido continua no indice quente")
+
+    for a, b in sorted(sup | contra):
+        ta, tb = _mtime(a), _mtime(b)
+        if ta and tb and tb > ta:
+            add("retroativa", "media", a, b,
+                "o alvo e %d dia(s) mais novo que quem o corrige"
+                % (tb - ta).days)
+
+    for a, b in sorted(sup):
+        if (b, a) in sup and a < b:      # `a < b` reporta o par uma vez so
+            add("ciclo", "alta", a, b, "os dois se declaram a versao mais nova")
+
+    return out
+
+
 def stats(g: dict) -> dict:
     by_type, isolated = {}, 0
     for n in g["nodes"]:
@@ -473,6 +586,7 @@ def main(argv=None) -> int:
     sub.add_parser("broken", help="wikilinks que nao resolvem")
     p = sub.add_parser("cold", help="candidatos a decay")
     p.add_argument("--days", type=int, default=30)
+    sub.add_parser("contradicoes", help="afirmacoes incompativeis ainda vivas")
 
     args = ap.parse_args(argv)
     if not args.cmd:
@@ -543,6 +657,25 @@ def main(argv=None) -> int:
                 print(f"  {b['source']}  ->  [[{b['target_raw']}]]")
 
         _emit(res, args.json, plain)
+
+    elif args.cmd == "contradicoes":
+        res = contradictions(g)
+
+        def plain(res):
+            if not res:
+                print("nenhuma contradicao estrutural: as relacoes tipadas "
+                      "sao consistentes entre si e com o indice quente.")
+                return
+            print("%d contradicao(oes) — o acervo afirma coisas incompativeis:"
+                  % len(res))
+            print()
+            for c in res:
+                print("  [%s/%s] %s -> %s" % (c["severity"], c["rule"],
+                                              c["source"], c["target"]))
+                print("        %s" % c["detail"])
+
+        _emit(res, args.json, plain)
+        return 1 if any(c["severity"] == "alta" for c in res) else 0
 
     elif args.cmd == "cold":
         res = cold_candidates(g, args.days)

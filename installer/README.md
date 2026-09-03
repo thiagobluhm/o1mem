@@ -55,7 +55,7 @@ O comando instalado chama-se `o1mem` (definido em `bin`), independente do nome d
 Clone o repo, instale e use:
 
 ```bash
-git clone https://github.com/thiagobluhm/skills.git
+git clone https://github.com/thiagobluhm/o1mem.git
 cd skills/installer
 npm link
 o1mem status

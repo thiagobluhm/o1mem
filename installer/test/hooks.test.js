@@ -65,7 +65,7 @@ test('settings.json inexistente → cria do zero com hook', () => {
   assert(hooks.isHandoverHook(settings.hooks.UserPromptSubmit[0]));
 });
 
-test('settings com hook pré-existente em PreCompact → preserva, adiciona ao UserPromptSubmit', () => {
+test('hook de terceiro em PreCompact → preservado, e o nosso entra nos dois eventos', () => {
   // Fixture: settings com PreCompact hook + UserPromptSubmit vazio
   const existing = {
     permissions: ['file:read'],
@@ -89,11 +89,17 @@ test('settings com hook pré-existente em PreCompact → preserva, adiciona ao U
 
   // Verifica
   const settings = JSON.parse(fs.readFileSync(settingsFixturePath, 'utf8'));
-  assert.strictEqual(settings.hooks.PreCompact.length, 1);
+  // o hook de terceiro continua ali, e na PRIMEIRA posicao: registramos por
+  // append, nunca reordenando o que o usuario ja tinha
   assert.strictEqual(settings.hooks.PreCompact[0].hooks[0].command, 'python other_hook.py');
+  // o nosso passa a existir nos DOIS eventos -- PreCompact e o instante da
+  // perda de contexto, onde a captura automatica da sessao e gravada
+  assert.strictEqual(settings.hooks.PreCompact.length, 2);
+  assert(hooks.isHandoverHook(settings.hooks.PreCompact[1]));
   assert.strictEqual(settings.hooks.UserPromptSubmit.length, 1);
   assert(hooks.isHandoverHook(settings.hooks.UserPromptSubmit[0]));
   assert.strictEqual(settings.permissions[0], 'file:read');
+  assert.deepStrictEqual(result.events, ['UserPromptSubmit', 'PreCompact']);
 });
 
 test('segundo merge → não duplica hook', () => {

@@ -1,0 +1,35 @@
+# Gabarito MANUAL do proprio projeto O(1)mem — o caso DIFICIL.
+#
+# Cada consulta foi escrita de proposito com OUTRAS PALAVRAS que as do fato
+# indexado: sem o nome do arquivo, sem hash de commit, sem o jargao da entrada
+# do indice. E a pergunta que alguem faz meses depois, quando lembra do
+# problema mas nao do vocabulario -- exatamente o caso em que o casamento
+# textual falha e a busca semantica precisa justificar o proprio custo.
+#
+# O gabarito automatico (chamadas do MEMORY.md, default do o1mem_eval.py) mede
+# outra coisa: se o acervo esta alcancavel pelas palavras com que foi escrito.
+# Ali o baseline textual satura em 1.000 e nao separa os motores. Este arquivo
+# existe porque um numero que nao discrimina nao defende nada.
+#
+# Formato: um JSON por linha. {"q": pergunta, "expect": no ou lista de nos}
+# Linhas iniciadas por # sao comentario.
+#
+# ATENCAO: os alvos sao os fatos da memoria DESTE projeto. Noutra maquina eles
+# nao existem e o eval os reporta como "fora do corpus" e os ignora -- use este
+# arquivo como modelo de formato e escreva o seu.
+{"q": "de que jeito da pra conversar com o sistema sem precisar abrir o assistente inteiro", "expect": "project_o1mem_terminal_proprio_repl"}
+{"q": "por que a letra verde no fundo escuro ficou ruim de ler e o que resolveu", "expect": "project_o1mem_terminal_proprio_repl"}
+{"q": "quando alguem pergunta sobre uma coisa antiga do projeto, de onde sai a resposta", "expect": "project_o1mem_lembrar_e_sync_dois_repos"}
+{"q": "existe mais de um destino na hora de publicar e eles nao levam a mesma coisa", "expect": "project_o1mem_dois_repos_publico_privado"}
+{"q": "o documento de saida de sessao deixou de morar dentro do repositorio; qual foi o motivo", "expect": "project_o1mem_handovers_fora_do_projeto"}
+{"q": "a busca por significado nao enxergava o material mais velho e guardado", "expect": "project_o1mem_rag_acervo_frio_e_i18n"}
+{"q": "a parte repetitiva do procedimento virou programa em vez de continuar como texto explicativo", "expect": "project_o1mem_handover_scriptado"}
+{"q": "a versao que roda na maquina ficou diferente da que esta versionada e isso enganou o diagnostico", "expect": "project_o1mem_drift_repo_vs_instalado"}
+{"q": "anotacao de um trabalho aparecendo misturada com a de outro trabalho diferente", "expect": ["project_o1mem_entrelacamento_e_guarda_memoria", "feedback_memoria_por_projeto_nao_misturar"]}
+{"q": "conferir todos os lugares para onde o codigo vai antes de afirmar que ja mandei", "expect": "feedback_verificar_todos_remotes_antes_de_push"}
+{"q": "e desonesto anunciar que acabou e logo em seguida emendar que falta uma coisa", "expect": "feedback_comeco_meio_fim_nunca_finalizei_com_ressalva"}
+{"q": "aquele endereco remoto que desapareceu foi apagado de proposito, nao e problema", "expect": "feedback_origin_skills_deletado_proposital"}
+{"q": "o texto curto que descreve a alteracao tambem pode expor informacao que nao devia sair", "expect": "feedback_nao_citar_cliente_em_mensagem_de_commit_publico"}
+{"q": "desenho das ligacoes entre as anotacoes virou uma entrega de verdade e nao so um apoio", "expect": "project_o1mem_custo_indice_e_grafo"}
+{"q": "alguem de fora apontou defeitos e parte deles continua em aberto", "expect": "project_o1mem_critica_externa_backlog"}
+{"q": "aviso aparecendo fora do terminal, na propria area de trabalho do sistema", "expect": "project_o1mem_multiruntime_dashboard_toast"}

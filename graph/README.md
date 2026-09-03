@@ -23,6 +23,24 @@ markdown do índice. Custo de indexação ≈ zero — é um parser, não um emb
 | **Nó** | cada `.md` em `memory/` (incluindo `MEMORY.md` e `MEMORY_ARCHIVE.md`) |
 | **Aresta `wiki`** | `[[nome]]` — o fio de raciocínio, escrito à mão |
 | **Aresta `index`** | `[texto](arquivo.md)` — pertencimento ao índice quente/frio |
+| **Aresta tipada** | `[[corrige:nome]]` — **o que** um fato faz com o outro (campo `rel`) |
+
+### Relações tipadas
+
+Um wikilink comum diz que dois fatos se tocam. Ele não diz se o segundo **corrige**
+o primeiro, **contradiz** o primeiro ou apenas o menciona — e essa diferença é a que
+importa numa memória destilada, onde reescrever um fato quando ele muda é a operação
+central. Prefixar o alvo com um verbo declara isso:
+
+```markdown
+Este achado [[corrige:project_caminho_errado]] e [[contradiz:feedback_antigo]].
+```
+
+Vocabulário **fechado**: `causa`, `corrige`, `contradiz`, `substitui`, `depende`
+(+ `causes`, `fixes`, `contradicts`, `supersedes`, `depends`). Um prefixo fora dessa
+lista — `[[C:/tmp/x]]` — é tratado como parte do **nome**, nunca como relação
+inventada. `[[nome]]` sem verbo continua exatamente como era, com `rel: null`: nada
+do que já está escrito muda de significado.
 
 A resolução de alvo é tolerante por desenho: `[[perguntar-antes-de-alterar-codigo]]`
 casa com `feedback_perguntar_antes_de_alterar_codigo.md` (hífen ≡ underscore,
@@ -40,6 +58,7 @@ python o1mem_graph.py --project meuprojeto path <a> <b>
 python o1mem_graph.py --project meuprojeto orphans    # existem, mas nada leva até eles
 python o1mem_graph.py --project meuprojeto broken
 python o1mem_graph.py --project meuprojeto cold --days 30   # candidatos a decay
+python o1mem_graph.py --project meuprojeto contradicoes     # afirmações incompatíveis vivas
 ```
 
 Todo comando aceita `--json` — é assim que um agente consome. `--root <pasta>`
@@ -59,6 +78,26 @@ e por isso parou de ser reescrita.
 
 O comando **sugere**; quem move é humano.
 
+### `contradicoes` — o custo de lembrar de duas versões
+
+O modo de falha de uma memória destilada não é esquecer: é lembrar de **duas versões**
+do mesmo fato e carregar as duas no boot como se ambas valessem. O `MEMORY.md` é lido
+inteiro toda sessão — um fato superado que continua ali não é um arquivo velho parado
+num canto, é uma afirmação ativa competindo com a correção dela.
+
+Este comando acha isso cruzando as relações tipadas com o índice quente e as datas.
+**Zero LLM**: são as arestas que o humano já escreveu, checadas contra si mesmas.
+
+| Regra | O que acusa |
+|---|---|
+| `aberta` | `A contradiz B` e **os dois** no índice quente — o boot carrega as duas versões |
+| `superado` | `A corrige B` e **B ainda** no índice quente — a versão corrigida segue sendo servida |
+| `retroativa` | `A corrige B`, mas B foi escrito **depois** de A — relação invertida ou correção já velha |
+| `ciclo` | `A substitui B` e `B substitui A` — as duas se declaram a mais nova, não há ordem |
+
+Sai `1` quando há alguma de severidade **alta** (`aberta`, `superado`, `ciclo`), para
+poder virar passo de verificação. Acervo sem nenhuma relação tipada nunca acusa nada.
+
 ## UI
 
 ```bash
@@ -76,7 +115,8 @@ escreve `%TEMP%\o1mem_grafo.html` e abre. Página autocontida — zero CDN.
 ## Teste
 
 ```bash
-node test_ui_smoke.js
+python test_contradicoes_offline.py   # arestas tipadas + validador
+node test_ui_smoke.js                 # a UI contra o graph.json real
 ```
 
 Monta um DOM mínimo e roda a UI contra o `graph.json` real — `node --check` só

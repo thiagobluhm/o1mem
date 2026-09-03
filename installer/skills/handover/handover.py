@@ -383,6 +383,27 @@ def cmd_collect(args):
               % (os.path.basename(__file__), slug))
         print("   (move %d arquivo(s); nada e sobrescrito)" % tot)
 
+    # Captura automatica: a materia-prima que o hook gravou sem pedir nada a
+    # ninguem. Aparece aqui porque `collect` roda ANTES de redigir -- e o
+    # momento em que ela vale, e a alternativa (o modelo reconstruir o fio de
+    # memoria) e exatamente o custo que este produto existe para nao pagar.
+    print()
+    snap = None
+    try:
+        sys.path.insert(0, SCRIPT_DIR)
+        import snapshot as _snap
+        snap = _snap.mais_recente(slug)
+    except Exception:
+        pass
+    if snap:
+        idade = (_dt.datetime.now()
+                 - _dt.datetime.fromtimestamp(os.path.getmtime(snap)))
+        print("snapshot    : %s" % snap)
+        print("              capturado ha %dh%02dm -- FONTE BRUTA, leia antes de redigir"
+              % (idade.seconds // 3600 + idade.days * 24, (idade.seconds % 3600) // 60))
+    else:
+        print("snapshot    : nenhum (hook nao capturou esta sessao ainda)")
+
     print()
     blk, _, _ = retomada_block(P["memory_md"])
     print("RETOMADA atual no MEMORY.md:")

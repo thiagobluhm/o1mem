@@ -38,7 +38,9 @@ Progresso invisível é o defeito nº 1 desta skill. Marque `in_progress`/`compl
 
 > O `handover.py` fica **na mesma pasta deste `SKILL.md`** — normalmente `~/.claude/skills/handover/handover.py` (instalação global) ou `<projeto>/.claude/skills/handover/handover.py` (project-local). Rode **de dentro do projeto**: ele descobre a raiz, o slug da memória, o repo git e o `o1mem_rag.py` a partir do seu CWD.
 
-Devolve num bloco só: git (branch/HEAD/tree/remotes em sincronia), caminhos **já validados**, handovers existentes, a `RETOMADA` atual e a contagem de `(Anterior ...)`. Não colete nada disso à mão.
+Devolve num bloco só: git (branch/HEAD/tree/remotes em sincronia), caminhos **já validados**, handovers existentes, o **snapshot** da sessão, a `RETOMADA` atual e a contagem de `(Anterior ...)`. Não colete nada disso à mão.
+
+> **O snapshot é a sua fonte bruta — leia antes de redigir.** O hook grava, sem pedir nada a ninguém, o que a sessão realmente fez: as perguntas do usuário na ordem, os arquivos tocados e os comandos rodados (`~/.claude/projects/<slug>/snapshots/`). Ele **não é um handover** e não tenta ser: não tem o porquê, não tem o próximo passo, não entra na memória e não é indexado. Ele existe porque a captura é barata e o julgamento é caro — e porque, quando alguém dá `/clear` sem passar por aqui, o snapshot é a única coisa que sobra. Se o `collect` mostrar um, leia-o em vez de reconstruir o fio de memória: reconstruir é exatamente o custo que este produto existe para não pagar.
 
 **TRAVA DE VALOR — decida com o que o `collect` mostrou.** Handover só vale se houver pelo menos UM de: (a) estado pendente que importa, (b) raciocínio caro de reconstruir, (c) plano de vários passos não executado. **Tarefa concluída e verificada → NÃO escreva handover.** Grave só a memória e diga que basta. Não "encontre" trabalho para justificar o arquivo.
 

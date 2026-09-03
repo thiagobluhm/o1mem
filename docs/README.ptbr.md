@@ -1,17 +1,17 @@
-# 🪙 O(1)mem — Token Economy for Claude Code
+# 🧠 O(1)mem — Memória que persiste, encontra e se governa
 
 Leia em outros idiomas: [English](../README.md)
 
 Nunca usou terminal? Comece por aqui: [Guia de instalação passo a passo](./INSTALACAO.ptbr.md)
 
-### A cada nova sessão aberta após o `/clear`, você retoma o fio pelo índice — não re-paga a conversa arrastada
+### O fio sobrevive ao `/clear` — destilado num índice lido em tempo constante, buscável quando o índice não basta, e conferível quando duas versões de um fato colidem
 🇧🇷 Made in Brazil
 
 ---
 
 ![status](https://img.shields.io/badge/status-field--tested-green)
 ![tool](https://img.shields.io/badge/runtime-Claude%20Code-8A2BE2)
-![focus](https://img.shields.io/badge/focus-token%20economy-brightgreen)
+![focus](https://img.shields.io/badge/focus-mem%C3%B3ria%20viva-brightgreen)
 ![approach](https://img.shields.io/badge/chunking-agentic-blue)
 ![npm](https://img.shields.io/badge/npm-%40tbluhm82%2Fo1mem-CB3837)
 ![lang](https://img.shields.io/badge/docs-pt--BR-yellow)
@@ -34,8 +34,10 @@ Nunca usou terminal? Comece por aqui: [Guia de instalação passo a passo](./INS
 - `retomar` — **resolve qual projeto** retomar antes de ler qualquer memória, para quem trabalha em mais de um projeto ativo na mesma máquina.
 - `lembrar` — **responde uma pergunta sobre o passado** consultando o acervo frio sob demanda, para que "você lembra do X?" pare de ser respondido com "não" enquanto a resposta está indexada a um comando de distância.
 - `handover-nudge-hook` — **avisa a hora** de dar o `/handover`, medindo o crescimento da conversa a cada turno (com trava de valor e rota de silêncio embutidas).
-- `graph` — **atravessa por estrutura**: transforma os `[[wikilinks]]` que você já escreve em um grafo navegável (CLI + página). Não entra no boot.
+- `snapshot` — **captura sem pedir licença**: o hook grava o que a sessão realmente fez (perguntas feitas, arquivos tocados, comandos rodados) no instante em que o contexto se perde. É matéria-prima, não handover — existe para que um `/clear` sem handover não custe tudo.
+- `graph` — **atravessa por estrutura**: transforma os `[[wikilinks]]` que você já escreve em um grafo navegável (CLI + página), agora com **relações tipadas** (`[[corrige:x]]`, `[[contradiz:x]]`) e uma checagem sem LLM de fatos que se contradizem enquanto os dois seguem vivos. Não entra no boot.
 - `rag` — **atravessa por significado**: busca semântica sobre o acervo frio (`MEMORY_ARCHIVE.md`, handovers), para quando ninguém escreveu o wikilink. Também não entra no boot.
+- `eval` — **o número de recall**: `hit@k` e `MRR` sobre o acervo real, contra um baseline BM25, para que o cap seja defendido com medição e não com afirmação de arquitetura.
 - **instalador npm** (`@tbluhm82/o1mem`) — empacota Python + Node num só comando: detecta ambiente, indexa projetos, registra o hook.
 
 👉 Uma faz a faxina. A outra impede que suje de novo. O hook avisa a hora. O grafo e o RAG atravessam o que já foi escrito. Juntos fecham o ciclo.
@@ -301,7 +303,7 @@ Duas formas de instalar — escolha pelo que você já tem no sistema:
 | **Só git** | clone + copiar pastas (abaixo) | só as skills; hook e `rag` são manuais |
 
 ```bash
-git clone https://github.com/thiagobluhm/skills.git
+git clone https://github.com/thiagobluhm/o1mem.git
 cp -r skills/organizador-mem skills/handover skills/retomar <seu-projeto>/.claude/skills/
 ```
 

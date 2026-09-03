@@ -383,6 +383,45 @@ def _spawn_daemon_detached(project_slug=None):
         pass
 
 
+def _capture_snapshot(transcript, slug, motivo):
+    """Grava a captura automatica da sessao. Fail-open, sem stdout, sem excecao.
+
+    Nao usa "-m": snapshot.py vive em handover/, pasta irma desta tanto no repo
+    quanto no vendor do installer -- mesma resolucao ja usada pelo daemon.
+
+    Este e o unico ponto do produto onde estado sobrevive SEM gesto humano. Se
+    falhar, falha calado: um snapshot ausente custa materia-prima, um hook que
+    levanta excecao custa o turno do usuario.
+    """
+    try:
+        import importlib
+        here = os.path.dirname(os.path.abspath(__file__))
+        # Tres layouts reais, nesta ordem: repo (hook e irmao de handover/),
+        # vendor do pacote npm (vendor/hook + vendor/handover), e a instalacao
+        # manual, onde o hook foi copiado para ~/.claude/hooks/ e a unica copia
+        # de snapshot.py e a da skill instalada. Assumir so o primeiro faria a
+        # captura sumir em silencio justamente na maquina de quem instalou a mao
+        # -- o mesmo drift que ja quebrou a indexacao do RAG uma vez.
+        cands = [os.path.normpath(os.path.join(here, "..", "handover")),
+                 here,
+                 os.path.join(CLAUDE_DIR, "skills", "handover")]
+        snap_dir = next((d for d in cands
+                         if os.path.isfile(os.path.join(d, "snapshot.py"))), None)
+        if snap_dir is None:
+            return None
+        if snap_dir not in sys.path:
+            sys.path.insert(0, snap_dir)
+        snapshot = importlib.import_module("snapshot")
+        dest = snapshot.capture(transcript, slug, motivo)
+        log_event({"ts": int(time.time()), "project": slug,
+                   "event": "snapshot", "status": "ok", "motivo": motivo})
+        return dest
+    except Exception:
+        log_event({"ts": int(time.time()), "project": slug,
+                   "event": "snapshot", "status": "erro", "motivo": motivo})
+        return None
+
+
 def notify_windows(title, message):
     """Dispara uma notificacao toast nativa do Windows via PowerShell.
 
@@ -487,6 +526,10 @@ def main():
             "already_nudged_level": int(state.get("last_level", 0) or 0),
             "silenced": bool(state.get("silenced")),
         })
+        # A compactacao e o momento exato da perda: o que sai da janela aqui nao
+        # volta. Capturar antes de retornar e o que torna o handover recuperavel
+        # quando ninguem rodou /handover a tempo.
+        _capture_snapshot(transcript, slug, data.get("trigger") or "precompact")
         return  # NUNCA escreve stdout nem bloqueia (exit 0)
 
     threshold, step = load_config()
@@ -536,6 +579,10 @@ def main():
         "model": model,
     })
 
+    # Captura automatica no mesmo instante do aviso. O nudge pode ser ignorado
+    # -- o snapshot nao depende da resposta a ele.
+    snap = _capture_snapshot(transcript, slug, "nudge")
+
     # Toast nativo (Windows/macOS) -- paridade com o watchdog do Hermes.
     # Alem do texto injetado no contexto, cutuca o usuario fora do terminal.
     proj_display = slug if slug else "Projeto desconhecido"
@@ -557,6 +604,11 @@ A conversa desta sessao cresceu ~{growth_k}k tokens acima do piso inicial da ses
 Disciplina de handover deste ambiente: um handover so agrega valor quando ha estado duravel a preservar — tarefa pela metade, raciocinio caro de reconstruir, ou plano de varios passos ainda nao executado. Uma sessao de exploracao descartavel, ou uma tarefa ja concluida e verificada, dispensa handover; nesses casos a memoria basta. Havendo valor, a escolha entre preparar o handover agora, adiar, ou silenciar os avisos do restante da sessao cabe ao usuario.
 
 Mecanica desta sessao, se for util: os avisos ficam silenciados quando o arquivo "{state_file}" contem {{"last_level": {level}, "silenced": true}}; os desfechos de cada aviso sao registrados em "{log_file}"."""
+
+    if snap:
+        ctx += (f"""
+
+Captura automatica desta sessao (perguntas feitas, arquivos tocados, comandos rodados) foi gravada em "{_fwd(snap)}". Ela e materia-prima nao julgada, nao e um handover e nao esta na memoria; serve como fonte se um handover for preparado agora ou numa sessao seguinte.""")
 
     # Enriquecimento RAG (opcional, fail-open)
     if _should_rag_enrich():

@@ -7,11 +7,12 @@ Read this in other languages: [Português (Brasil)](./docs/README.ptbr.md)
 
 ---
 
+[![CI](https://github.com/thiagobluhm/o1mem/actions/workflows/ci.yml/badge.svg)](https://github.com/thiagobluhm/o1mem/actions/workflows/ci.yml)
 ![status](https://img.shields.io/badge/status-field--tested-green)
 ![tool](https://img.shields.io/badge/runtime-Claude%20Code-8A2BE2)
 ![focus](https://img.shields.io/badge/focus-living%20memory-brightgreen)
 ![approach](https://img.shields.io/badge/chunking-agentic-blue)
-![npm](https://img.shields.io/badge/npm-%40tbluhm82%2Fo1mem-CB3837)
+[![npm](https://img.shields.io/npm/v/@tbluhm82/o1mem)](https://www.npmjs.com/package/@tbluhm82/o1mem)
 ![lang](https://img.shields.io/badge/docs-en-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 

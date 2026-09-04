@@ -96,6 +96,14 @@ jobs:
       # O pacote npm carrega COPIAS dos scripts. Uma correcao aplicada so na
       # fonte chega ao git e ainda assim e publicada quebrada. Este portao pega
       # exatamente isso.
+      # O `.gitignore` e uma sugestao: `git add -f` passa por cima, e prosa no
+      # CONTRIBUTING depende de alguem ler. O grafo e o indice sao construidos a
+      # partir da memoria REAL de quem roda -- carregam titulo, descricao e fio
+      # de raciocinio de projeto de cliente. Este repo e publico, e o que entra
+      # no historico nao sai. O hook local avisa cedo; este passo e o que garante.
+      - name: artefato derivado da memoria
+        run: python tools/check-artefatos.py
+
       - name: sincronia do vendor
         run: bash tools/check-vendor-sync.sh
 

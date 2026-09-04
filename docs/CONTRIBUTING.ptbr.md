@@ -18,7 +18,11 @@ O propósito do O(1)mem é indexar a memória do seu projeto, e essa memória co
 privada. As ferramentas são construídas para que o dado nunca entre no repositório:
 
 - o índice vetorial persiste em `~/.claude/o1mem/chroma/<slug>/`, nunca dentro do worktree;
-- `graph/graph.json` é gerado localmente e já está no `.gitignore`;
+- `graph/graph.json` é gerado localmente e já está no `.gitignore`, e essa regra
+  agora é **executada**, não apenas escrita: ligue o hook do repo uma vez com
+  `git config core.hooksPath .githooks` e um commit que carregue artefato
+  derivado é recusado. A mesma checagem roda no CI, então `--no-verify` não
+  passa;
 - o `handover-nudge.log` vive em `~/.claude/`.
 
 O mesmo vale para **screenshots**. Toda imagem em `assets/` precisa ser dado sintético de

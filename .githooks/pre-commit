@@ -1,0 +1,40 @@
+#!/bin/sh
+# pre-commit do O(1)mem -- a regra valendo no momento em que ainda da para desfazer.
+#
+# Por que um hook versionado e nao ".configure na sua maquina": hook em
+# .git/hooks nao viaja com o clone, entao a protecao existiria so para quem a
+# configurou -- que e sempre quem menos precisa dela. Este vive no repo e e
+# ligado com:
+#
+#     git config core.hooksPath .githooks
+#
+# Duas checagens, nesta ordem, porque a primeira e a que causa dano permanente:
+#   1. artefato derivado da memoria (grafo, indice, log, handover, snapshot)
+#   2. credencial / dado sensivel no conteudo em stage
+#
+# Ambas rodam de novo no CI. Aqui e conveniencia; la e garantia -- este hook
+# pode ser pulado com --no-verify, e tudo bem: o portao real nao e este.
+#
+# NOTA: este arquivo TEM de ser LF (ver .gitattributes). Um hook com CRLF falha
+# no Linux/macOS com "bad interpreter", e o shell reporta isso de um jeito que
+# parece que o hook nao existe.
+
+set -e
+
+RAIZ="$(git rev-parse --show-toplevel)"
+PY="${O1MEM_PYTHON:-python3}"
+command -v "$PY" >/dev/null 2>&1 || PY=python
+command -v "$PY" >/dev/null 2>&1 || {
+    echo "pre-commit: sem python no PATH -- checagens PULADAS." >&2
+    exit 0
+}
+
+"$PY" "$RAIZ/tools/check-artefatos.py" --staged --raiz "$RAIZ" || exit 1
+
+ARQS=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -n "$ARQS" ]; then
+    # shellcheck disable=SC2086
+    "$PY" "$RAIZ/tools/scan-sensivel.py" --raiz "$RAIZ" --arquivos $ARQS || exit 1
+fi
+
+exit 0

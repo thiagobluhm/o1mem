@@ -18,7 +18,11 @@ The whole point of O(1)mem is to index your project's memory, and that memory is
 private. The tooling is built so the data never enters the repository:
 
 - the vector index persists at `~/.claude/o1mem/chroma/<slug>/`, never inside the worktree;
-- `graph/graph.json` is generated locally and is already in `.gitignore`;
+- `graph/graph.json` is generated locally and is already in `.gitignore`, and
+  that rule is now **enforced**, not merely written: enable the shipped hook once
+  with `git config core.hooksPath .githooks` and a commit carrying a derived
+  artifact is refused. The same check runs in CI, so `--no-verify` does not get
+  it through;
 - `handover-nudge.log` lives under `~/.claude/`.
 
 The same applies to **screenshots**. Every image in `assets/` must be synthetic sample data

@@ -11,6 +11,7 @@
 # "arquivo<CR>" e o teste falha dizendo que o arquivo nao existe. Foi assim que a
 # primeira execucao desta CI ficou vermelha.
 *.sh text eol=lf
+.githooks/* text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 

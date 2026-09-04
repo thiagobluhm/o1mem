@@ -41,6 +41,13 @@ for pair in $PAIRS; do
     [ -z "$pair" ] && continue
     src="${pair%%:*}"
     dst="${pair##*:}"
+    # Tolera CR caso alguem regrave este arquivo em CRLF no Windows. Sem isto,
+    # no Linux o CR entra no VALOR da variavel (IFS nao separa por CR) e o
+    # caminho vira "arquivo<CR>": o teste acusa a ausencia de um arquivo que
+    # existe, apontando para o lugar errado. Foi assim que a primeira execucao
+    # desta CI ficou vermelha.
+    src="${src%$'\r'}"
+    dst="${dst%$'\r'}"
 
     if [ ! -f "$src" ]; then
         echo "MISSING SOURCE  $src"

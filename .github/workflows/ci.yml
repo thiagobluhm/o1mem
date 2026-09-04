@@ -55,7 +55,7 @@ jobs:
           python rag/test_daemon_offline.py
 
       # Cada suite Node sinaliza falha por process.exitCode, entao rodar uma a
-      # uma e o suficiente -- nao ha runner por tras.
+      # uma e o suficiente -- nao ha framework de teste por tras.
       - name: suites node
         run: |
           node installer/test/cli-bugs.test.js
@@ -100,7 +100,7 @@ jobs:
         run: bash tools/check-vendor-sync.sh
 
       # ATENCAO ao ler um verde daqui: o passe 1 do scan deriva os termos de
-      # ~/.claude/projects, que nao existe num runner. Entao aqui ele nao tem
+      # ~/.claude/projects, que nao existe numa maquina de CI. Entao aqui ele nao tem
       # termo nenhum e vira no-op -- quem protege o PR e o passe 2 (credencial,
       # token, chave, e-mail, caminho absoluto, IP privado). A deny-list de
       # nomes de projeto so funciona na maquina de quem tem esses projetos, e e

@@ -5,6 +5,15 @@
 # ignorar a CI.
 * text=auto eol=crlf
 
+# EXCECAO OBRIGATORIA: shell script e YAML de workflow precisam de LF.
+# Um .sh com CRLF nao "quase funciona" no Linux -- o CR entra no VALOR das
+# variaveis (IFS nao separa por CR), entao um caminho lido do script vira
+# "arquivo<CR>" e o teste falha dizendo que o arquivo nao existe. Foi assim que a
+# primeira execucao desta CI ficou vermelha.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
 # Binarios nunca sao tocados.
 *.png binary
 *.jpg binary

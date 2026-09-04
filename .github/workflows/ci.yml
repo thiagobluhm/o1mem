@@ -1,0 +1,109 @@
+# CI do O(1)mem.
+#
+# POR QUE EXISTE
+# --------------
+# Havia 12 suites e 2 portoes (sincronia do vendor, scan de dado sensivel) que
+# so rodavam se alguem lembrasse. Isso e o mesmo que nao existir: a qualidade
+# ficava presa a disciplina de uma pessoa, e a primeira regressao seria
+# encontrada por um estranho depois do repo virar publico.
+#
+# DESENHO
+# -------
+# O job `testes` roda no Windows porque e a plataforma onde a suite foi
+# verificada verde de ponta a ponta, e porque parte do produto (atalho de area
+# de trabalho, terminal via Windows Terminal) so existe la. O job
+# `portabilidade` cobre o nucleo em Linux -- as duas suites que nao dependem de
+# nada alem da biblioteca padrao -- e prova o piso de Python 3.8 que o
+# requirements.txt declara. Sem ele, "roda em 3.8" seria uma afirmacao sem
+# ninguem checando.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  testes:
+    name: suites completas (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # chromadb e a UNICA dependencia de teste. O embedder de verdade
+      # (sentence-transformers, ~470 MB) fica de fora: O1MEM_RAG_FAKE_EMBED=1
+      # troca por um embedder deterministico por hash, entao a suite valida
+      # chunking, incremental e persistencia sem baixar modelo nenhum.
+      - name: dependencia de teste
+        run: python -m pip install --quiet chromadb
+
+      - name: suites python
+        env:
+          O1MEM_RAG_FAKE_EMBED: '1'
+        run: |
+          python graph/test_contradicoes_offline.py
+          python handover/test_snapshot_offline.py
+          python rag/test_eval_offline.py
+          python rag/test_rag_offline.py
+          python rag/test_daemon_offline.py
+
+      # Cada suite Node sinaliza falha por process.exitCode, entao rodar uma a
+      # uma e o suficiente -- nao ha runner por tras.
+      - name: suites node
+        run: |
+          node installer/test/cli-bugs.test.js
+          node installer/test/env.test.js
+          node installer/test/hooks.test.js
+          node installer/test/menu.test.js
+          node installer/test/shortcut.test.js
+          node installer/test/skills.test.js
+          node installer/test/tui.test.js
+
+  portabilidade:
+    name: nucleo em Linux (piso 3.8)
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.8', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      # So o que roda com a biblioteca padrao. O caminho do hook e do grafo NAO
+      # pode ganhar dependencia -- este job e quem impede isso de acontecer
+      # sem alguem perceber.
+      - run: python graph/test_contradicoes_offline.py
+      - run: python handover/test_snapshot_offline.py
+
+  portoes:
+    name: portoes (vendor + dado sensivel)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # O pacote npm carrega COPIAS dos scripts. Uma correcao aplicada so na
+      # fonte chega ao git e ainda assim e publicada quebrada. Este portao pega
+      # exatamente isso.
+      - name: sincronia do vendor
+        run: bash tools/check-vendor-sync.sh
+
+      # ATENCAO ao ler um verde daqui: o passe 1 do scan deriva os termos de
+      # ~/.claude/projects, que nao existe num runner. Entao aqui ele nao tem
+      # termo nenhum e vira no-op -- quem protege o PR e o passe 2 (credencial,
+      # token, chave, e-mail, caminho absoluto, IP privado). A deny-list de
+      # nomes de projeto so funciona na maquina de quem tem esses projetos, e e
+      # la que ela precisa rodar antes do push.
+      - name: dado sensivel (passe 2; ver comentario)
+        run: python tools/scan-sensivel.py --todos

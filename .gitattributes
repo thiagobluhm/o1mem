@@ -1,0 +1,14 @@
+# O repo e mantido em CRLF (Windows e a plataforma primaria: hook, atalho e
+# terminal nasceram la). Sem esta declaracao, um checkout em Linux normaliza os
+# finais de linha e o `check-vendor-sync.sh` acusa drift onde nao ha -- CI
+# vermelha por causa de \r, que e o pior tipo de vermelho: o que ensina a
+# ignorar a CI.
+* text=auto eol=crlf
+
+# Binarios nunca sao tocados.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

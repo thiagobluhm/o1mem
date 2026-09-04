@@ -25,6 +25,12 @@
 
 # --- skills/rag (OPT-IN; so quem usa a busca semantica instala) ---
 # A regra "hook roda com stdlib" continua valendo: nada do caminho do hook
-# importa isto. A suite test_rag_offline.py tambem roda sem (fake embedder).
+# importa isto.
+#
+# CORRECAO: a suite test_rag_offline.py NAO roda sem chromadb. O
+# O1MEM_RAG_FAKE_EMBED=1 dispensa o sentence-transformers (os ~470 MB de
+# modelo), mas rag.index() chama get_collection(), que importa chromadb. Ou
+# seja: testar a busca custa um pip install de chromadb, e so isso. O CI faz
+# exatamente essa distincao -- as suites de stdlib rodam sem nada instalado.
 # chromadb>=0.5
 # sentence-transformers>=3.0

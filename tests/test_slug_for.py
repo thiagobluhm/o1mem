@@ -200,3 +200,32 @@ def test_guard_ignora_caminho_desconhecido():
     texto = "veja /usr/local/bin/algo"
     cand, _ = memory_routing_guard.mentioned_foreign_slug(texto, OWN, SLUGS)
     assert cand is None
+
+
+# ----------------------------------- o handover tem que conseguir indexar o RAG
+def test_rag_args_usam_project_colado():
+    r"""O `write` gravava handover e memoria e so entao falhava ao indexar:
+
+        rag : FALHOU (rc=2) -- argument --project: expected one argument
+
+    Mesma causa de sempre: slug POSIX comeca com '-' e, como valor separado, o
+    argparse o le como flag. O efeito e pior que parece -- o acervo frio nunca
+    era indexado no Mac, entao a skill `retomar` consultava um indice que nao
+    tinha handover nenhum, em silencio.
+
+    O '--handovers' continua DEPOIS do subcomando: ele e argumento do `index`,
+    nao global. Trocar os dois de lugar reintroduz o bug irmao do '--json'.
+    """
+    args = handover.build_rag_index_args("/rag.py", "-Users-t--PESSOAIS-o1mem", "/docs")
+    assert "--project=-Users-t--PESSOAIS-o1mem" in args, args
+    assert "--project" not in args, "forma separada reintroduz o bug: %s" % (args,)
+    i_cmd = args.index("index")
+    assert args.index("--project=-Users-t--PESSOAIS-o1mem") < i_cmd, args
+    assert args.index("--handovers") > i_cmd, "--handovers e do subcomando: %s" % (args,)
+    assert args[args.index("--handovers") + 1] == "/docs"
+
+
+def test_rag_args_windows_seguem_iguais():
+    args = handover.build_rag_index_args("/rag.py", "c--Projetos-O1MEM", "/docs")
+    assert args == ["/rag.py", "--project=c--Projetos-O1MEM", "index",
+                    "--handovers", "/docs"], args

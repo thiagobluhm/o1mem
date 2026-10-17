@@ -105,6 +105,23 @@ def slug_for(path):
     return re.sub(r"[^A-Za-z0-9]", "-", drive.lower() + rest)
 
 
+def build_rag_index_args(rag_cli, slug, doc_dir):
+    """argv do o1mem_rag.py para indexar handover + memoria.
+
+    `--project=<slug>` COLADO: todo slug POSIX comeca com '-' e, como valor
+    separado, o argparse o le como outra flag e aborta com "expected one
+    argument". O `write` entao gravava handover e memoria e falhava so na
+    indexacao -- ou seja, no Mac o acervo frio nunca entrava no indice, e a
+    skill `retomar` consultava um corpus sem handover nenhum, em silencio.
+    Em Windows o slug comeca com a letra do drive e a forma separada passava.
+
+    `--handovers` fica DEPOIS do subcomando porque e argumento do `index`, nao
+    global -- ao contrario do `--project`. Trocar os dois de lugar reintroduz o
+    bug irmao do `--json`.
+    """
+    return [rag_cli, "--project=%s" % slug, "index", "--handovers", doc_dir]
+
+
 def handover_dir(slug):
     """O UNICO lugar onde um handover pode ser gravado.
 
@@ -604,8 +621,8 @@ def cmd_write(args):
         # nao apenas deixa de somar o acervo frio -- ele DELETA os chunks de
         # handover ja indexados (viram to_delete). O frio e justamente o que o
         # cap tira da memoria; sem ele o RAG so reindexa o que ja e O(1).
-        rc, out = run([sys.executable, P["rag"], "--project", slug, "index",
-                       "--handovers", P["doc_dir"]])
+        rc, out = run([sys.executable] + build_rag_index_args(
+            P["rag"], slug, P["doc_dir"]))
         if rc == 0:
             linha = next((l for l in out.splitlines() if l.startswith("chunks")), out[:120])
             print("rag       : OK  %s" % linha.strip())
@@ -655,7 +672,7 @@ def cmd_migrate(args):
         print("pulados   : %d (nome ja existente -- resolva a mao)" % pulados)
     print("destino   : %s" % P["doc_dir"])
     if not args.dry_run and movidos:
-        print("Reindexe:   python <o1mem_rag.py> --project %s index --handovers %s"
+        print("Reindexe:   python <o1mem_rag.py> --project=%s index --handovers %s"
               % (slug, P["doc_dir"]))
     return 0
 
